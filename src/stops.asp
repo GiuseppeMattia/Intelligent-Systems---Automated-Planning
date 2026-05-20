@@ -1,6 +1,4 @@
-/*
-    stop(stop_id, stop_name, zone_id)
-*/
+% stop(stop_id, stop_name, zone_id)
 
 stop("830012810", "Stazione di CAGLIARI S.GILLA", 6).
 stop("830012816", "Stazione di PLOAGHE", 412).
