@@ -24,3 +24,15 @@ pip install -r requirements.txt
 ```bash
 python3 -m clingo src/prova.asp
 ```
+
+---
+---
+
+# Possible encodings
+| Encoding | Meaning |
+|---|---|
+| stop(Stop_id, Trip_id, Station_id, Stop_sequence). | input fact |
+| stop_time(Stop_id, Arrival_time, Departure_time). | output fact |
+
+
+
