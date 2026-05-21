@@ -12,15 +12,16 @@ def generate_stoptimes_input():
     df = pd.read_csv(os.getenv('PATH_TO_STOP_TIMES_CSV'))
 
     stop_df = pd.DataFrame()
-    stop_df['trip_id'] = df['trip_id'] #TODO has to be filtered with only trains? could be reduce to exa num only
+    stop_df['trip_id'] = df['trip_id'] #TODO has to be filtered with only trains? could be reduce to exa num only. If reamins with '-', asp will crash if trip_id is not in "..."
     stop_df['station_id'] = df['stop_id']
     stop_df['stop_sequence'] = df['stop_sequence']
     stop_df.insert(0, 'stop_id', range(1, len(stop_df) + 1))
+    stop_df['max_sequence'] = df.groupby('trip_id')['stop_sequence'].transform('max')
 
     with open(os.getenv('PATH_TO_STOP_INPUT'), 'w') as file:
         file.write(f'%% stop(Stop_id, Trip_id, Station_id, Stop_sequence).\n\n')
         for row in stop_df.itertuples(index=False):
-            encoded_row = f'stop({row.stop_id}, {row.trip_id}, {row.station_id}, {row.stop_sequence}).\n'
+            encoded_row = f'stop({row.stop_id}, "{row.trip_id}", {row.station_id}, {row.stop_sequence}, {row.max_sequence}).\n'
             file.write(encoded_row)
 
 
