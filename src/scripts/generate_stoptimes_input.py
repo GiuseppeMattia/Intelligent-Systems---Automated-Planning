@@ -21,7 +21,7 @@ def generate_stoptimes_input():
     with open(os.getenv('PATH_TO_STOP_INPUT'), 'w') as file:
         file.write(f'%% stop(Stop_id, Trip_id, Station_id, Stop_sequence).\n\n')
         for row in stop_df.itertuples(index=False):
-            encoded_row = f'stop({row.stop_id}, "{row.trip_id}", {row.station_id}, {row.stop_sequence}, {row.max_sequence}).\n'
+            encoded_row = f'stop({row.stop_id}, "{row.trip_id}", "{row.station_id}", {row.stop_sequence}, {row.max_sequence}).\n'
             file.write(encoded_row)
 
 

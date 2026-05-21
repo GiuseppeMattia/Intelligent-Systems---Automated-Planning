@@ -1,9 +1,14 @@
-import csv
+import csv, os
+from dotenv import load_dotenv
 
 def convert_stops():
-    with open('../../res/sanitized/stops.csv', mode='r', encoding='utf-8') as csv_file, \
-         open('../stops', mode='w', encoding='utf-8') as asp_file:
+    load_dotenv()
+
+    with open(os.getenv('PATH_TO_STOPS_CSV'), mode='r', encoding='utf-8') as csv_file, \
+         open(os.getenv('PATH_TO_STATION_ASP'), mode='w', encoding='utf-8') as asp_file:
         
+        asp_file.write(f'%% stop(Station_id, Station_name, Zone_id).\n\n')
+
         lettore = csv.DictReader(csv_file)
         
         for riga in lettore:
