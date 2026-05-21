@@ -36,3 +36,21 @@ python3 -m clingo src/prova.asp
 
 
 
+## Scripts usage
+
+```bash
+python3 src/scripts/stopsconvertasp.py
+```
+simply convert from csv to asp facts
+
+---
+```bash
+python3 src/scrcipts/travel_time_calc.py
+```
+calculate min e max reaching time from a station to another, that are linked together, then calculate the avg and write a csv file -> 'traveltimes.csv'
+
+---
+```bash
+python3 src/scripts/required_time_encoding.py
+```
+pick the two stations' ids and the avg reaching time, then write all in asp facts
