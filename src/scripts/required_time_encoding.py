@@ -1,10 +1,16 @@
 import csv
+import os
+from dotenv import load_dotenv
 
+load_dotenv()
+
+TRAVEL_TIMES_CSV_PATH = os.getenv('PATH_TO_TRAVEL_TIMES_CSV')
+PATH_TO_REQUIRED_TIME_ASP = os.getenv('PATH_TO_REQUIRED_TIME_ASP')
 
 
 def convert_required_time_encoding():
-    with open('../../res/sanitized/travel_times.csv', mode='r', encoding='utf-8') as csv_file, \
-         open('../../res/asp_encoding/required_time.asp', mode='w', encoding='utf-8') as asp_file:
+    with open(TRAVEL_TIMES_CSV_PATH, mode='r', encoding='utf-8') as csv_file, \
+         open(PATH_TO_REQUIRED_TIME_ASP, mode='w', encoding='utf-8') as asp_file:
         
         lettore = csv.DictReader(csv_file)
 
