@@ -54,3 +54,9 @@ calculate min e max reaching time from a station to another, that are linked tog
 python3 src/scripts/required_time_encoding.py
 ```
 pick the two stations' ids and the avg reaching time, then write all in asp facts
+
+---
+```bash
+python3 -m clingo res/asp_encoding/stops.asp src/asp_scripts/links_generator.asp | grep "connected" | tr ' ' '\n' | sed 's/$/./' > res/asp_encoding/links.asp
+```
+generates links.asp

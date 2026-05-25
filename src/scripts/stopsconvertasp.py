@@ -16,7 +16,7 @@ def convert_stops():
             stop_name = riga['stop_name'].strip()
             zone_id = riga['zone_id'].strip()
             
-            fatto_asp = f'stop("{stop_id}", "{stop_name}", {zone_id}).\n'
+            fatto_asp = f'station("{stop_id}", "{stop_name}", {zone_id}).\n'
             
             asp_file.write(fatto_asp)
 
