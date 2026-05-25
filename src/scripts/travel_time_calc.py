@@ -17,7 +17,13 @@ import re
 from collections import defaultdict
 from pathlib import Path
 import sys
+import os
+from dotenv import load_dotenv
 
+
+load_dotenv()
+
+SANITIZED_FOLDER = os.getenv("PATH_TO_SANITIZED_FOLDER")
 
 time_pattern = re.compile(r"^(\d+):(\d{2}):(\d{2})$")
 
@@ -126,7 +132,7 @@ def write_travel_time_csv(
 
 def main() -> int:
     
-    root_dir = Path('../../res/sanitized').expanduser().resolve()
+    root_dir = Path(SANITIZED_FOLDER).expanduser().resolve()
     stop_times_path = root_dir / "stop_times.csv"
     stops_path = root_dir / "stops.csv"
     if not stop_times_path.exists() or not stops_path.exists():
@@ -140,7 +146,7 @@ def main() -> int:
         print("Nessuna tratta diretta trovata.")
         return 1
 
-    output_path = Path("../../res/sanitized/travel_times.csv")
+    output_path = Path(SANITIZED_FOLDER) / "travel_times.csv"
     write_travel_time_csv(output_path, travel_times, stop_names)
     print(f"File: {output_path} con {len(travel_times)} tratte dirette.")
     return 0
