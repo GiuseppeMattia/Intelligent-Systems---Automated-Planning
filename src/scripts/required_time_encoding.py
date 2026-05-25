@@ -1,8 +1,10 @@
 import csv
 
+
+
 def convert_required_time_encoding():
     with open('../../res/sanitized/travel_times.csv', mode='r', encoding='utf-8') as csv_file, \
-         open('../required_time.asp', mode='w', encoding='utf-8') as asp_file:
+         open('../../res/asp_encoding/required_time.asp', mode='w', encoding='utf-8') as asp_file:
         
         lettore = csv.DictReader(csv_file)
 
