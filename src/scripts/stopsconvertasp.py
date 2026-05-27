@@ -7,7 +7,7 @@ def convert_stops():
     with open(os.getenv('PATH_TO_STOPS_CSV'), mode='r', encoding='utf-8') as csv_file, \
          open(os.getenv('PATH_TO_STATION_ASP'), mode='w', encoding='utf-8') as asp_file:
         
-        asp_file.write(f'%% stop(Station_id, Station_name, Zone_id).\n\n')
+        asp_file.write(f'%% station(Station_id, Station_name, Zone_id).\n\n')
 
         lettore = csv.DictReader(csv_file)
         
@@ -19,6 +19,8 @@ def convert_stops():
             fatto_asp = f'station("{stop_id}", "{stop_name}", {zone_id}).\n'
             
             asp_file.write(fatto_asp)
+
+    print("\tCreated station.asp with facts about stations -> station(Station_id, Station_name, Zone_id).\n")
 
 
 convert_stops()

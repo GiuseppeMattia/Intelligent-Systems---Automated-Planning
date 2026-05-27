@@ -148,7 +148,7 @@ def main() -> int:
 
     output_path = Path(SANITIZED_FOLDER) / "travel_times.csv"
     write_travel_time_csv(output_path, travel_times, stop_names)
-    print(f"File: {output_path} con {len(travel_times)} tratte dirette.")
+    print("\n\tCreated travel_times.csv with direct stop pairs and average travel times.\n")
     return 0
 
 

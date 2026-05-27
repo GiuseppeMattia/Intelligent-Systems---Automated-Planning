@@ -38,20 +38,22 @@ python3 -m clingo src/prova.asp
 
 ## Scripts usage
 
+- Inside scripts folder
+
 ```bash
-python3 src/scripts/stopsconvertasp.py
+python3 stopsconvertasp.py
 ```
-simply convert from csv to asp facts
+simply convert from csv to asp facts of type: station(Station_id, Station_name, Zone_id).
 
 ---
 ```bash
-python3 src/scrcipts/travel_time_calc.py
+python3 travel_time_calc.py
 ```
 calculate min e max reaching time from a station to another, that are linked together, then calculate the avg and write a csv file -> 'traveltimes.csv'
 
 ---
 ```bash
-python3 src/scripts/required_time_encoding.py
+python3 required_time_encoding.py
 ```
 pick the two stations' ids and the avg reaching time, then write all in asp facts
 

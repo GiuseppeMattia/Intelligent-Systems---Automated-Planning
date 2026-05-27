@@ -19,10 +19,13 @@ def convert_required_time_encoding():
         for riga in lettore:
             departing_stop_id = riga['idstazioneA'].strip()
             arriving_stop_id = riga['idstazioneB'].strip()
+            # potremmo aggiungere anche i nomi delle stazioni se ci servono...
             time_required = riga['tempo_medio_minuti'].strip()
             
             fatto_asp = f'required_time("{departing_stop_id}", "{arriving_stop_id}", {time_required}).\n'
             
             asp_file.write(fatto_asp)
+
+    print("\n\tCreated required_time.asp with facts about required times -> required_time(Departing_Stop_Id, Arriving_Stop_Id, Time_Required).\n")
 
 convert_required_time_encoding()
