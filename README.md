@@ -62,3 +62,10 @@ pick the two stations' ids and the avg reaching time, then write all in asp fact
 python3 -m clingo res/asp_encoding/stops.asp src/asp_scripts/links_generator.asp | grep "connected" | tr ' ' '\n' | sed 's/$/./' > res/asp_encoding/links.asp
 ```
 generates links.asp
+
+
+---
+```bash
+python3 -m clingo res/asp_encoding/stops.asp src/asp_scripts/encode_time_table.asp | grep "station" | tr ' ' '\n' | sed 's/$/./' > res/output/encoded_time_table.asp
+```
+generates encoded_time_table.asp
