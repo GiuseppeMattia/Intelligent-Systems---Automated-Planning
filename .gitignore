@@ -2,6 +2,11 @@ res/**
 venv/**
 .env
 
+.DS_Store
+..DS_Store
+../.DS_Store
+../../.DS_Store
+
 _pycache__/**
 __pycache__/**
 *.pyc

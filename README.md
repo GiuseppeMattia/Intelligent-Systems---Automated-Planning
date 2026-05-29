@@ -69,3 +69,9 @@ generates links.asp
 python3 -m clingo res/asp_encoding/stops.asp src/asp_scripts/encode_time_table.asp | grep "station" | tr ' ' '\n' | sed 's/$/./' > res/output/encoded_time_table.asp
 ```
 generates encoded_time_table.asp
+
+---
+```bash
+python3 map.py
+```
+reconstructs train routes from the ASP facts (`first_station` and `next_station` in `encoded_time_table.asp`) and station coordinates from `stops.csv`, and generates an interactive geographical Leaflet map (saved to `mappa_treni.html` or the location specified by `PATH_TO_MAP_OUTPUT` in `.env`) complete with custom color themes, light/dark modes, filters, tooltips, and statistics.
