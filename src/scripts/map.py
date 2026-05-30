@@ -50,7 +50,7 @@ def load_stops(csv_path):
 
 
 def load_shapes():
-    shapes_df = pd.read_csv("res/sanitized/shapes.csv")
+    shapes_df = pd.read_csv("../../res/sanitized/shapes.csv")
     shapes_df = shapes_df[~shapes_df['shape_id'].astype(str).str.startswith('7')]
     shapes_dict = {}
     shapes_df = shapes_df.sort_values(by=['shape_id', 'shape_pt_sequence'])
