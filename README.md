@@ -62,13 +62,20 @@ pick the two stations' ids and the avg reaching time, then write all in asp fact
 python3 -m clingo res/asp_encoding/stops.asp src/asp_scripts/links_generator.asp | grep "connected" | tr ' ' '\n' | sed 's/$/./' > res/asp_encoding/links.asp
 ```
 generates links.asp
-
+**WARNING** The command works only for Linux environments, if you are in Windows try this
+```bash
+python -m clingo res/asp_encoding/stops.asp src/asp_scripts/links_generator.asp | Select-String "connected" | ForEach-Object { $_.Line -split ' ' } | ForEach-Object { "$_." } | Set-Content res/asp_encoding/links.asp
+```
 
 ---
 ```bash
 python3 -m clingo res/asp_encoding/stops.asp src/asp_scripts/encode_time_table.asp | grep "station" | tr ' ' '\n' | sed 's/$/./' > res/output/encoded_time_table.asp
 ```
-generates encoded_time_table.asp
+generates encoded_time_table.asp 
+**WARNING** Again, if you are in Windows the command is syntactically different: create the "output" folder inside res and then try to run the following:
+```bash
+python -m clingo res/asp_encoding/stops.asp src/asp_scripts/encode_time_table.asp | Select-String "station" | ForEach-Object { $_.Line -split ' ' } | ForEach-Object { "$_." } | Set-Content res/output/encoded_time_table.asp
+```
 
 ---
 ```bash
