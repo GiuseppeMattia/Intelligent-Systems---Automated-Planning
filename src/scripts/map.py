@@ -4,6 +4,7 @@ import re
 import csv
 from pathlib import Path
 import folium
+import pandas as pd
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -46,6 +47,20 @@ def load_stops(csv_path):
                 continue
                 
     return stations_coords, stations_names
+
+
+def load_shapes():
+    shapes_df = pd.read_csv("res/sanitized/shapes.csv")
+    shapes_df = shapes_df[~shapes_df['shape_id'].astype(str).str.startswith('7')]
+    shapes_dict = {}
+    shapes_df = shapes_df.sort_values(by=['shape_id', 'shape_pt_sequence'])
+
+
+    for shape_id, rows_df in shapes_df.groupby('shape_id'):
+        coord_list = list(zip(rows_df['shape_pt_lat'], rows_df['shape_pt_lon']))
+        shapes_dict[shape_id] = coord_list
+
+    return shapes_dict
 
 
 def parse_asp_timetable(file_path):
@@ -109,6 +124,8 @@ def main():
     
     stations_coords, stations_names = load_stops(stops_csv_path)
     print(f"Stazioni caricate da stops.csv: {len(stations_coords)}")
+
+    shapes_coord = load_shapes()
     
     first_stations, next_stations = parse_asp_timetable(encoded_time_table_path)
     print(f"Fatti ASP analizzati: first_station={len(first_stations)}, next_station={len(next_stations)}")
@@ -174,19 +191,23 @@ def main():
     for path_key, trips in unique_paths.items():
         start_id = path_key[0]
         end_id = path_key[-1]
-        
-        # Risoluzione coordinate per la tratta
-        coordinates = []
+
         valid_path_station_names = []
         for sid in path_key:
             if sid in stations_coords:
-                coordinates.append(stations_coords[sid])
                 valid_path_station_names.append(stations_names.get(sid, sid).replace("Stazione di ", ""))
                 active_stations.add(sid)
                 
+        representative_trip = trips[0]
+        
+        if representative_trip in shapes_coord:
+            coordinates = shapes_coord[representative_trip]
+        else:
+            coordinates = [stations_coords[sid] for sid in path_key if sid in stations_coords]
+                
         if len(coordinates) < 2:
             continue
-            
+
         start_name = stations_names.get(start_id, start_id).replace("Stazione di ", "")
         end_name = stations_names.get(end_id, end_id).replace("Stazione di ", "")
         color = get_station_color(start_id)
