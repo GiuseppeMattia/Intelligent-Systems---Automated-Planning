@@ -173,19 +173,25 @@ def main():
         hash_val = sum(ord(c) for c in station_id)
         return fallback_colors[hash_val % len(fallback_colors)]
         
-    active_starts = sorted(
-        list(set(path_key[0] for path_key in unique_paths.keys() if path_key)),
-        key=lambda sid: stations_names.get(sid, sid)
-    )   # in ordine alfabetico
+    # active_starts = sorted(
+    #     list(set(path_key[0] for path_key in unique_paths.keys() if path_key)),
+    #     key=lambda sid: stations_names.get(sid, sid)
+    # )   # in ordine alfabetico
     
-    feature_groups = {} # dictionary di feature groups, uno per ogni stazione di partenza
-                        # per il filtro legenda
-    for sid in active_starts:
-        name = stations_names.get(sid, sid)
-        clean_name = name.replace("Stazione di ", "")
-        group_name = f"Partenze da {clean_name}"
-        fg = folium.FeatureGroup(name=group_name)
-        feature_groups[sid] = fg
+    # feature_groups = {} # dictionary di feature groups, uno per ogni stazione di partenza
+    #                     # per il filtro legenda
+    # for sid in active_starts:
+    #     name = stations_names.get(sid, sid)
+    #     clean_name = name.replace("Stazione di ", "")
+    #     group_name = f"Partenze da {clean_name}"
+    #     fg = folium.FeatureGroup(name=group_name)
+    #     feature_groups[sid] = fg
+
+    feature_groups = {}  # trip_id -> FeatureGroup
+    for path_key, trips in unique_paths.items():
+        for trip_id in trips:
+            fg = folium.FeatureGroup(name=f"Trip {trip_id}", show=False)
+            feature_groups[trip_id] = fg
         
     active_stations = set()
     for path_key, trips in unique_paths.items():
@@ -211,7 +217,7 @@ def main():
         start_name = stations_names.get(start_id, start_id).replace("Stazione di ", "")
         end_name = stations_names.get(end_id, end_id).replace("Stazione di ", "")
         color = get_station_color(start_id)
-        fg = feature_groups[start_id]
+        # fg = feature_groups[start_id]
         
         stops_str = " → ".join(valid_path_station_names)
         trips_str = ", ".join(trips[:5])
@@ -234,14 +240,25 @@ def main():
         </div>
         """
         
-        folium.PolyLine(
-            locations=coordinates,
-            color=color,
-            weight=4.5,
-            opacity=0.8,
-            popup=folium.Popup(popup_html, max_width=300),
-            tooltip=f"Tratta: {start_name} → {end_name} ({len(trips)} corse)"
-        ).add_to(fg)
+        # folium.PolyLine(
+        #     locations=coordinates,
+        #     color=color,
+        #     weight=4.5,
+        #     opacity=0.8,
+        #     popup=folium.Popup(popup_html, max_width=300),
+        #     tooltip=f"Tratta: {start_name} → {end_name} ({len(trips)} corse)"
+        # ).add_to(fg)
+
+        for trip_id in trips:
+            fg = feature_groups[trip_id]
+            folium.PolyLine(
+                locations=coordinates,
+                color=color,
+                weight=4.5,
+                opacity=0.8,
+                popup=folium.Popup(popup_html, max_width=300),
+                tooltip=f"Trip: {trip_id} — {start_name} → {end_name}"
+            ).add_to(fg)
         
     group_stazioni = folium.FeatureGroup(name="Stazioni", control=True)
     
@@ -289,8 +306,12 @@ def main():
             tooltip=clean_name
         ).add_to(group_stazioni)
         
-    for sid in active_starts:
-        mappa.add_child(feature_groups[sid])
+    # for sid in active_starts:
+    #     mappa.add_child(feature_groups[sid])
+    # mappa.add_child(group_stazioni)
+
+    for fg in feature_groups.values():
+        mappa.add_child(fg)
     mappa.add_child(group_stazioni)
     
     folium.LayerControl(position='topright', collapsed=False).add_to(mappa)
