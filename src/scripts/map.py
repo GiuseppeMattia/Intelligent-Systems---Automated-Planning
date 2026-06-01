@@ -11,20 +11,21 @@ load_dotenv()
 script_dir = Path(__file__).parent.resolve()
 remote_dir = script_dir.parent.parent.resolve()
 
-stops_csv_path = os.getenv("PATH_TO_STOPS_CSV")
-encoded_time_table_path = os.getenv("PATH_TO_ENCODED_TIME_TABLE_ASP")
-map_path = os.getenv("PATH_TO_MAP_OUTPUT")
+def resolve_path(env_path, default_relative):
+    if env_path:
+        p = Path(env_path)
+        if not p.is_absolute():
+            temp_path = (script_dir / p).resolve()
+            if temp_path.exists() or temp_path.parent.exists():
+                return temp_path
+            return (remote_dir / p).resolve()
+        return p
+    return (remote_dir / default_relative).resolve()
 
-if stops_csv_path:
-    stops_csv_path = Path(stops_csv_path)
-    if not stops_csv_path.is_absolute():
-        temp_path = (script_dir / stops_csv_path).resolve()
-        if temp_path.exists():
-            stops_csv_path = temp_path
-        else:
-            stops_csv_path = (remote_dir / stops_csv_path).resolve()
-else:
-    stops_csv_path = remote_dir / "res" / "sanitized" / "stops.csv"
+stops_csv_path = resolve_path(os.getenv("PATH_TO_STOPS_CSV"), "res/sanitized/stops.csv")
+stop_times_csv_path = resolve_path(os.getenv("PATH_TO_STOP_TIMES_CSV"), "res/sanitized/stop_times.csv")
+encoded_time_table_path = resolve_path(os.getenv("PATH_TO_ENCODED_TIME_TABLE_ASP"), "res/asp_encoding/encoded_time_table.asp")
+map_path = resolve_path(os.getenv("PATH_TO_MAP_OUTPUT"), "res/map.html")
 
 
 
@@ -37,7 +38,7 @@ def load_stops(csv_path):
         reader = csv.DictReader(f)
         for row in reader:
             stop_id = row["stop_id"].strip()
-            stop_name = row["stop_name"].strip()
+            stop_name = row["stop_name"].strip().upper()
             try:
                 lat = float(row["stop_lat"].strip())
                 lon = float(row["stop_lon"].strip())
@@ -49,8 +50,44 @@ def load_stops(csv_path):
     return stations_coords, stations_names
 
 
+def load_trip_times(csv_path):
+    trip_times = {}
+    with open(csv_path, mode="r", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            trip_id = row["trip_id"].strip()
+            arr_time = row["arrival_time"].strip()
+            dep_time = row["departure_time"].strip()
+            try:
+                seq = int(row["stop_sequence"].strip())
+            except ValueError:
+                continue
+            
+            if len(arr_time) >= 5:
+                arr_time = arr_time[:5]
+            if len(dep_time) >= 5:
+                dep_time = dep_time[:5]
+                
+            if trip_id not in trip_times:
+                trip_times[trip_id] = {}
+            trip_times[trip_id][seq] = (dep_time, arr_time)
+            
+    formatted_times = {}
+    for trip_id, seqs in trip_times.items():
+        if not seqs:
+            continue
+        min_seq = min(seqs.keys())
+        max_seq = max(seqs.keys())
+        start_time = seqs[min_seq][0]
+        end_time = seqs[max_seq][1]
+        formatted_times[trip_id] = (start_time, end_time)
+        
+    return formatted_times
+
+
 def load_shapes():
-    shapes_df = pd.read_csv("../../res/sanitized/shapes.csv")
+    shapes_path = remote_dir / "res" / "sanitized" / "shapes.csv"
+    shapes_df = pd.read_csv(shapes_path)
     shapes_df = shapes_df[~shapes_df['shape_id'].astype(str).str.startswith('7')]
     shapes_dict = {}
     shapes_df = shapes_df.sort_values(by=['shape_id', 'shape_pt_sequence'])
@@ -99,7 +136,7 @@ def reconstruct_routes(first_stations, next_stations):
         curr = start_station
         visited = set()
         while curr and curr not in visited:  
-            visited.add(curr)                   # per evitare eventuale while a vita
+            visited.add(curr)
             route.append(curr)
             curr = next_stations.get(trip_id, {}).get(curr)
         routes[trip_id] = route
@@ -124,6 +161,9 @@ def main():
     
     stations_coords, stations_names = load_stops(stops_csv_path)
     print(f"Stazioni caricate da stops.csv: {len(stations_coords)}")
+    
+    trip_times = load_trip_times(stop_times_csv_path)
+    print(f"Orari caricati da stop_times.csv: {len(trip_times)}")
 
     shapes_coord = load_shapes()
     
@@ -187,11 +227,28 @@ def main():
     #     fg = folium.FeatureGroup(name=group_name)
     #     feature_groups[sid] = fg
 
-    feature_groups = {}  # trip_id -> FeatureGroup
+    fg_list = []
     for path_key, trips in unique_paths.items():
+        start_id = path_key[0]
+        end_id = path_key[-1]
+        start_name = stations_names.get(start_id, start_id).replace("STAZIONE DI ", "")
+        end_name = stations_names.get(end_id, end_id).replace("STAZIONE DI ", "")
         for trip_id in trips:
-            fg = folium.FeatureGroup(name=f"Trip {trip_id}", show=False)
-            feature_groups[trip_id] = fg
+            s_time, e_time = ("", "")
+            if trip_id in trip_times:
+                s_time, e_time = trip_times[trip_id]
+                name = f"({start_name} → {end_name}) [{s_time} → {e_time}] {trip_id}"
+            else:
+                name = f"({start_name} → {end_name}) {trip_id}"
+            fg = folium.FeatureGroup(name=name, show=False)
+            sort_key = (start_name, end_name, s_time, trip_id)
+            fg_list.append((sort_key, trip_id, fg))
+
+    fg_list.sort()
+
+    feature_groups = {}  
+    for _, trip_id, fg in fg_list:
+        feature_groups[trip_id] = fg
         
     active_stations = set()
     for path_key, trips in unique_paths.items():
