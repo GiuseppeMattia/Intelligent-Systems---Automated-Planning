@@ -340,23 +340,24 @@ def main():
     mappa.get_root().html.add_child(folium.Element(stats_html))
     #buttons to show every trip or to don't show any trip at all
     buttons_html = """
+    <style>
+        .toggle-btn {
+            padding: 8px 14px; border-radius: 8px; border: none; cursor: pointer;
+            background-color: silver; color: white; font-size: 13px; font-weight: 600;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            transition: background-color 0.2s ease;
+        }
+        .toggle-btn:hover {
+            background-color: #909090;
+        }
+    </style>
     <div style="position: fixed;
                 top: 10px; left: 50px;
                 z-index: 9999;
                 display: flex; gap: 8px;
                 font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
-        <button onclick="toggleAllLayers(true)"
-                style="padding: 8px 14px; border-radius: 8px; border: none; cursor: pointer;
-                       background-color: silver; color: white; font-size: 13px; font-weight: 600;
-                       box-shadow: 0 2px 8px rgba(0,0,0,0.3);">
-            Tutte le corse
-        </button>
-        <button onclick="toggleAllLayers(false)"
-                style="padding: 8px 14px; border-radius: 8px; border: none; cursor: pointer;
-                       background-color: silver; color: white; font-size: 13px; font-weight: 600;
-                       box-shadow: 0 2px 8px rgba(0,0,0,0.3);">
-            Nessuna corsa
-        </button>
+        <button class="toggle-btn" onclick="toggleAllLayers(true)">Tutte le corse</button>
+        <button class="toggle-btn" onclick="toggleAllLayers(false)">Nessuna corsa</button>
     </div>
     <script>
         function toggleAllLayers(show) {
