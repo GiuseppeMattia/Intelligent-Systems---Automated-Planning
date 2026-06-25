@@ -23,7 +23,7 @@ def generate_station_rest_input():
     with open(os.getenv('PATH_TO_REST_INPUT'), 'w') as file:
         file.write(f'%% rest(Station_id, Min_rest, Max_rest).\n\n')
         for row in rest_df.itertuples(index=False):
-            encoded_row = f'rest({row.stop_id}, {row.min}, {row.max}).\n'
+            encoded_row = f'rest({row.stop_id}, {int(row.min)}, {int(row.max)}).\n'
             file.write(encoded_row)
 
 
