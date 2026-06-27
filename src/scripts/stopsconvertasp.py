@@ -16,11 +16,11 @@ def convert_stops():
             stop_name = riga['stop_name'].strip()
             zone_id = riga['zone_id'].strip()
             
-            fatto_asp = f'station("{stop_id}", "{stop_name}", {zone_id}).\n'
+            fatto_asp = f'stop("{stop_id}", "{stop_name}", {zone_id}).\n'
             
             asp_file.write(fatto_asp)
 
-    print("\tCreated station.asp with facts about stations -> station(Station_id, Station_name, Zone_id).\n")
+    print("\tCreated stations.asp with facts about stations -> stop(Station_id, Station_name, Zone_id).\n")
 
 
 convert_stops()
