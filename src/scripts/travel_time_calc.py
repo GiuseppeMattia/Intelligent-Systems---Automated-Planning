@@ -117,7 +117,16 @@ def write_travel_time_csv(
                 continue
             min_time = min(times)
             max_time = max(times)
+            
+            # media tra minimo e massimo, arrotondata all'intero più vicino
             average_time = (min_time + max_time + 1) // 2
+            # Per essere più precisi sarebbe meglio la media di TUTTI i campi
+            # average_time = int(sum(times) / len(times) + 0.5)
+            # o ancora meglio la MEDIANA
+            sorted_times = sorted(times)
+            n = len(sorted_times)
+            #average_time = sorted_times[n // 2] if n % 2 == 1 else (sorted_times[n // 2 - 1] + sorted_times[n // 2]) // 2
+            
             writer.writerow([
                 from_id,
                 stop_names.get(from_id, from_id),
