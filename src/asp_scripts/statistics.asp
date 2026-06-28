@@ -1,0 +1,48 @@
+train(1,  "Blues", 300).
+train(2,  "Blues", 300).
+train(3,  "Blues", 300).
+train(4,  "Blues", 300).
+train(5,  "Blues", 300).
+train(6,  "Blues", 300).
+train(7,  "Blues", 300).
+train(8,  "Blues", 300).
+train(9,  "Blues", 300).
+train(10, "Blues", 300).
+train(11, "Blues", 300).
+train(12, "Blues", 300).
+
+train(13, "Swing", 326).
+train(14, "Swing", 326).
+train(15, "Swing", 326).
+train(16, "Swing", 326).
+train(17, "Swing", 326).
+train(18, "Swing", 326).
+train(19, "Swing", 326).
+train(20, "Swing", 326).
+train(21, "Swing", 326).
+train(22, "Swing", 326).
+
+train(23, "Minuetto", 345).
+train(24, "Minuetto", 345).
+train(25, "Minuetto", 345).
+train(26, "Minuetto", 345).
+train(27, "Minuetto", 345).
+train(28, "Minuetto", 345).
+train(29, "Minuetto", 345).
+train(30, "Minuetto", 345).
+train(31, "Minuetto", 345).
+train(32, "Minuetto", 345).
+
+train(33, "CAF", 204).
+train(34, "CAF", 204).
+train(35, "CAF", 204).
+train(36, "CAF", 204).
+train(37, "CAF", 204).
+train(38, "CAF", 204).
+train(39, "CAF", 204).
+train(40, "CAF", 204).
+
+
+conteggio(Treno, Data, Cont) :- Cont = #count{Trip : assign_trip_train(Trip, Data, Treno)}, train(Treno, _, _), calendar_dates(_, Data).
+
+#show conteggio/3.
