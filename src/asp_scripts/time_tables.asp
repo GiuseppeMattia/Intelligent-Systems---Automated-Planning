@@ -7,7 +7,7 @@
 
 
 
-1 { first_station(Trip_id, Station_id) : station(Station_id, _, _) } 1 :- trip_id(Trip_id).
+1 { first_station(Trip_id, Station_id) : stop(Station_id, _, _) } 1 :- trip_id(Trip_id).
 
 1 { next_station(Trip_id, Station_1_id, Station_2_id) : connected(Station_1_id, Station_2_id) } 1 :- first_station(Trip_id, Station_1_id).
 
