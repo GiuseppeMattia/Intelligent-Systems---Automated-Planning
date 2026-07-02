@@ -57,10 +57,12 @@ train(40, "CAF", 204).
 short_calendar_dates(Trip_id, Date) :- 
     calendar_dates(Trip_id, Date),
     Date >= 20241215,
-    Date < 20250115.
+    Date < 20241223.
 
 
 1 { assign_trip_train(Trip_id, Date, Train_id) : train(Train_id, _, _) } 1 :- short_calendar_dates(Trip_id, Date).
+
+% 1 { assign_trip_train("1-22054-01C-0083", 20241216, Train_id) : train(Train_id, _, _) } 1 :- short_calendar_dates("1-22054-01C-0083",20241216).
 
 
 last_station(Trip_id, Station_id) :-
@@ -116,8 +118,41 @@ allowed_trip(T1, T2) :-
     [1@1, T1, T2]
 
 
+% passenger_per_train(Train, Trip, Date, Station_1, Station_2, Cont) :-
+%     assign_trip_train(Trip, Date, Train),
+%     next_station(Trip, Station_1, Station_2),
+%     Cont = #sum{N : people(Station_1, _, Station_2, _, N, _)},
+%     Cont > 0.
+
+
+% passenger_per_train(Train, Trip, Date, Station_1, Station_3, Cont) :-
+%     assign_trip_train(Trip, Date, Train),
+%     next_station(Trip, Station_1, Station_2),
+%     next_station(Trip, Station_2, Station_3),
+%     not people(Station_1, _, Station_2, _, _, _),
+%     not people(Station_2, _, Station_3, _, _, _),
+%     people(Station_1, _, Station_3, _, _, _),
+%     Cont = #sum{N : people(Station_1, _, Station_3, _, N, _)}.
+
+
+
+pendolarismo(S1, S2, Sum, 1) :- people(S1, _, S2, _, _, "prima delle 7,15"), Sum = #sum{C : people(S1, _, S2, _, C, "prima delle 7,15")}, S1 != S2.
+pendolarismo(S1, S2, Sum, 2) :- people(S1, _, S2, _, _, "dalle 7,15 alle 8,14"), Sum = #sum{C : people(S1, _, S2, _, C, "dalle 7,15 alle 8,14")}, S1 != S2.
+pendolarismo(S1, S2, Sum, 3) :- people(S1, _, S2, _, _, "dalle 8,15 alle 9,14"), Sum = #sum{C : people(S1, _, S2, _, C, "dalle 8,15 alle 9,14")}, S1 != S2.
+pendolarismo(S1, S2, Sum, 4) :- people(S1, _, S2, _, _, "dopo le 9,14"), Sum = #sum{C : people(S1, _, S2, _, C, "dopo le 9,14")}, S1 != S2.
+
+
+max_capacity(Station_1, Station_2, Max, Fascia) :-
+    next_station(Trip, Station_1, Station_2, Fascia),
+    pendolarismo(Station_1, Station_2, _, Fascia),
+    Max = #sum{C : assign_trip_train(Trip, _, Train), train(Train, _, C)}.
 
 
 
 
-#show assign_trip_train/3.
+
+
+
+
+#show pendolarismo/4.
+%#show assign_trip_train/3.
