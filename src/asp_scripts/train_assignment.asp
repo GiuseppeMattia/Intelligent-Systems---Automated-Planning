@@ -6,52 +6,12 @@
 % python3 src/scripts/generate_calendar_dates_encoding.py
 
 %% RUN WITH:
-%% python3 -m clingo res/asp_encoding/trip_id.asp res/output/arrival_departure.asp res/output/encoded_time_table.asp res/asp_encoding/calendar_dates.asp src/asp_scripts/train_assignment.asp --stats=2 | grep "assign_trip_train" | tr ' ' '\n' | sed 's/$/./' > res/output/prova_ottimizzazione.asp
-
-train(1,  "Blues", 300).
-train(2,  "Blues", 300).
-train(3,  "Blues", 300).
-train(4,  "Blues", 300).
-train(5,  "Blues", 300).
-train(6,  "Blues", 300).
-train(7,  "Blues", 300).
-train(8,  "Blues", 300).
-train(9,  "Blues", 300).
-train(10, "Blues", 300).
-train(11, "Blues", 300).
-train(12, "Blues", 300).
-
-train(13, "Swing", 326).
-train(14, "Swing", 326).
-train(15, "Swing", 326).
-train(16, "Swing", 326).
-train(17, "Swing", 326).
-train(18, "Swing", 326).
-train(19, "Swing", 326).
-train(20, "Swing", 326).
-train(21, "Swing", 326).
-train(22, "Swing", 326).
-
-train(23, "Minuetto", 345).
-train(24, "Minuetto", 345).
-train(25, "Minuetto", 345).
-train(26, "Minuetto", 345).
-train(27, "Minuetto", 345).
-train(28, "Minuetto", 345).
-train(29, "Minuetto", 345).
-train(30, "Minuetto", 345).
-train(31, "Minuetto", 345).
-train(32, "Minuetto", 345).
-
-train(33, "CAF", 204).
-train(34, "CAF", 204).
-train(35, "CAF", 204).
-train(36, "CAF", 204).
-train(37, "CAF", 204).
-train(38, "CAF", 204).
-train(39, "CAF", 204).
-train(40, "CAF", 204).
-
+%% python -m clingo res/asp_encoding/trip_id.asp res/output/arrival_departure.asp res/output/encoded_time_table.asp res/asp_encoding/calendar_dates.asp src/asp_scripts/train_types.asp res/output/fatti_pendolarismo.asp  src/asp_scripts/train_assignment.asp --stats=2 --quiet=1 |
+% >>   Select-String "assign_trip_train" |
+% >>   ForEach-Object { $_.Line -split ' ' } |
+% >>   ForEach-Object { "$_." } |
+% >>   Set-Content  res/output/prova_ottimizzazione.asp
+% (NB: this is the command for Windows Powershell environment)
 
 
 short_calendar_dates(Trip_id, Date) :- 
@@ -61,8 +21,6 @@ short_calendar_dates(Trip_id, Date) :-
 
 
 1 { assign_trip_train(Trip_id, Date, Train_id) : train(Train_id, _, _) } 1 :- short_calendar_dates(Trip_id, Date).
-
-%1 { assign_trip_train("1-22054-01C-0083", 20241216, Train_id) : train(Train_id, _, _) } 1 :- short_calendar_dates("1-22054-01C-0083",20241216).
 
 
 last_station(Trip_id, Station_id) :-
@@ -158,10 +116,6 @@ max_capacity(Station_1, Station_2, Cap, Fascia) :-
     max_capacity(S1, S2, Cap, Fascia),
     Pass > Cap.
 
-
-
-
 #show max_capacity/4.
-%#show next_station_time/4.
 #show pendolarismo/4.
 #show assign_trip_train/3.
