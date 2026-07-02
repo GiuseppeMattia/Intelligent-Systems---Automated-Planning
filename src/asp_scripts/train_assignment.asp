@@ -5,13 +5,16 @@
 % python3 -m clingo res/asp_encoding/stops.asp src/asp_scripts/encode_time_table.asp | grep "station" | tr ' ' '\n' | sed 's/$/./' > res/output/encoded_time_table.asp
 % python3 src/scripts/generate_calendar_dates_encoding.py
 
-%% RUN WITH:
-%% python -m clingo res/asp_encoding/trip_id.asp res/output/arrival_departure.asp res/output/encoded_time_table.asp res/asp_encoding/calendar_dates.asp src/asp_scripts/train_types.asp res/output/fatti_pendolarismo.asp  src/asp_scripts/train_assignment.asp --stats=2 --quiet=1 |
+%% RUN WITH: (Windows)
+% python -m clingo res/asp_encoding/trip_id.asp res/output/arrival_departure.asp res/output/encoded_time_table.asp res/asp_encoding/calendar_dates.asp src/asp_scripts/train_types.asp res/output/fatti_pendolarismo.asp  src/asp_scripts/train_assignment.asp --stats=2 --quiet=1 |
 % >>   Select-String "assign_trip_train" |
 % >>   ForEach-Object { $_.Line -split ' ' } |
 % >>   ForEach-Object { "$_." } |
 % >>   Set-Content  res/output/prova_ottimizzazione.asp
 % (NB: this is the command for Windows Powershell environment)
+
+% RUN WITH: (Linux)
+% python3 -m clingo res/asp_encoding/trip_id.asp res/output/arrival_departure.asp res/output/encoded_time_table.asp res/asp_encoding/calendar_dates.asp res/output/fatti_pendolarismo.asp src/asp_scripts/train_types.asp src/asp_scripts/train_assignment.asp --stats=2 --quiet=1 | grep "assign_trip_train" | tr ' ' '\n' | sed 's/$/./' > res/output/prova_ottimizzazione.asp
 
 
 short_calendar_dates(Trip_id, Date) :- 
@@ -116,6 +119,6 @@ max_capacity(Station_1, Station_2, Cap, Fascia) :-
     max_capacity(S1, S2, Cap, Fascia),
     Pass > Cap.
 
-#show max_capacity/4.
-#show pendolarismo/4.
+%#show max_capacity/4.
+%#show pendolarismo/4.
 #show assign_trip_train/3.
