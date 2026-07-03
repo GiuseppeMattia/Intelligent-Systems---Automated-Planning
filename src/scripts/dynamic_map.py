@@ -2,6 +2,7 @@ from pandas.core import generic
 import os
 import re
 import csv
+import json
 from pathlib import Path
 import folium
 import pandas as pd
@@ -323,6 +324,7 @@ def main():
             ).add_to(fg)
         
     group_stazioni = folium.FeatureGroup(name="Stazioni", control=True)
+    station_marker_js_names = {}
     
     for sid in active_stations:
         if sid not in stations_coords:
@@ -356,7 +358,7 @@ def main():
         </div>
         """
         
-        folium.CircleMarker(
+        marker = folium.CircleMarker(
             location=coords,
             radius=6,
             color="#37474F",
@@ -366,7 +368,9 @@ def main():
             fill_opacity=1.0,
             popup=folium.Popup(station_popup_html, max_width=250),
             tooltip=clean_name
-        ).add_to(group_stazioni)
+        )
+        marker.add_to(group_stazioni)
+        station_marker_js_names[sid] = marker.get_name()
         
     # for sid in active_starts:
     #     mappa.add_child(feature_groups[sid])
@@ -400,38 +404,256 @@ def main():
     </div>
     """
     mappa.get_root().html.add_child(folium.Element(stats_html))
-    #buttons to show every trip or to don't show any trip at all
+    # Generazione dei dati delle stazioni per la ricerca JavaScript
+    js_stations_data = []
+    for sid in active_stations:
+        if sid not in stations_coords:
+            continue
+        coords = stations_coords[sid]
+        name = stations_names.get(sid, sid)
+        clean_name = name.replace("STAZIONE DI ", "").replace("Stazione di ", "")
+        js_stations_data.append({
+            "id": sid,
+            "name": clean_name.upper(),
+            "lat": coords[0],
+            "lon": coords[1],
+            "js_name": station_marker_js_names.get(sid, "")
+        })
+    stations_json = json.dumps(js_stations_data)
+    map_name = mappa.get_name()
+
+    # Barra di ricerca e bottoni
     buttons_html = """
     <style>
         .toggle-btn {
             padding: 8px 14px; border-radius: 8px; border: none; cursor: pointer;
-            background-color: silver; color: white; font-size: 13px; font-weight: 600;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-            transition: background-color 0.2s ease;
+            background-color: #757575; color: white; font-size: 13px; font-weight: 600;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            transition: background-color 0.2s ease, transform 0.1s ease;
         }
         .toggle-btn:hover {
-            background-color: #909090;
+            background-color: #616161;
+        }
+        .toggle-btn:active {
+            transform: scale(0.97);
+        }
+        
+        /* Stili della Barra di Ricerca */
+        .search-container {
+            position: relative;
+            display: inline-block;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .search-input {
+            padding: 8px 14px 8px 36px; 
+            border-radius: 8px; 
+            border: 1px solid rgba(0,0,0,0.15); 
+            background-color: white; 
+            color: #333; 
+            font-size: 13px; 
+            font-weight: 500;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15); 
+            width: 250px; 
+            outline: none;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .search-input:focus {
+            border-color: #1E88E5;
+            box-shadow: 0 2px 12px rgba(30, 136, 229, 0.35);
+            width: 280px;
+        }
+        .search-icon {
+            position: absolute; 
+            left: 12px; 
+            top: 50%; 
+            transform: translateY(-50%); 
+            width: 14px; 
+            height: 14px; 
+            fill: #757575;
+            pointer-events: none;
+            transition: fill 0.25s ease;
+        }
+        .search-input:focus + .search-icon {
+            fill: #1E88E5;
+        }
+        .search-results {
+            position: absolute; 
+            top: calc(100% + 6px); 
+            left: 0; 
+            width: 100%;
+            max-height: 240px; 
+            overflow-y: auto; 
+            background: white; 
+            border-radius: 8px; 
+            border: 1px solid rgba(0,0,0,0.1); 
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15); 
+            display: none; 
+            z-index: 10000;
+        }
+        .search-item {
+            padding: 10px 14px;
+            cursor: pointer;
+            border-bottom: 1px solid #f5f5f5;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            transition: background-color 0.15s ease;
+        }
+        .search-item:last-child {
+            border-bottom: none;
+        }
+        .search-item:hover, .search-item.selected {
+            background-color: #f5f5f5;
+        }
+        .search-item-name {
+            font-size: 13px;
+            font-weight: 600;
+            color: #212121;
+        }
+        .search-item-id {
+            font-size: 10px;
+            color: #757575;
+            font-family: monospace;
         }
     </style>
     <div style="position: fixed;
                 top: 10px; left: 50px;
                 z-index: 9999;
-                display: flex; gap: 8px;
-                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
+                display: flex; gap: 10px; align-items: center;">
+        
+        <div class="search-container">
+            <input type="text" id="station-search" class="search-input" placeholder="Cerca stazione per nome o ID..." 
+                   oninput="filterStations(this.value)"
+                   onkeydown="handleSearchKey(event)">
+            <svg class="search-icon" viewBox="0 0 24 24">
+                <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+            </svg>
+            <div id="search-results" class="search-results"></div>
+        </div>
+
         <button class="toggle-btn" onclick="toggleAllLayers(true)">Tutte le corse</button>
         <button class="toggle-btn" onclick="toggleAllLayers(false)">Nessuna corsa</button>
     </div>
     <script>
+        const stationsData = {stations_json};
+        let selectedIndex = -1;
+        let filteredList = [];
+
+        function filterStations(query) {
+            const resultsDiv = document.getElementById('search-results');
+            resultsDiv.innerHTML = '';
+            selectedIndex = -1;
+            
+            const cleanQuery = query.trim().toUpperCase();
+            if (!cleanQuery) {
+                resultsDiv.style.display = 'none';
+                filteredList = [];
+                return;
+            }
+
+            filteredList = stationsData.filter(station => 
+                station.name.includes(cleanQuery) || station.id.includes(cleanQuery)
+            ).slice(0, 10);
+
+            if (filteredList.length === 0) {
+                resultsDiv.style.display = 'none';
+                return;
+            }
+
+            filteredList.forEach((station, index) => {
+                const item = document.createElement('div');
+                item.className = 'search-item';
+                item.id = 'search-item-' + index;
+                item.onclick = () => selectStation(station);
+                
+                const displayName = highlightMatch(station.name, cleanQuery);
+                const displayId = highlightMatch(station.id, cleanQuery);
+
+                item.innerHTML = `
+                    <span class="search-item-name">${displayName}</span>
+                    <span class="search-item-id">ID: ${displayId}</span>
+                `;
+                resultsDiv.appendChild(item);
+            });
+
+            resultsDiv.style.display = 'block';
+        }
+
+        function highlightMatch(text, query) {
+            const idx = text.indexOf(query);
+            if (idx === -1) return text;
+            return text.substring(0, idx) + '<mark style="background-color: #ffe082; padding: 0 2px; border-radius: 2px;">' + text.substring(idx, idx + query.length) + '</mark>' + text.substring(idx + query.length);
+        }
+
+        function handleSearchKey(event) {
+            const resultsDiv = document.getElementById('search-results');
+            if (resultsDiv.style.display === 'none' || filteredList.length === 0) return;
+
+            if (event.key === 'ArrowDown') {
+                event.preventDefault();
+                changeSelection(1);
+            } else if (event.key === 'ArrowUp') {
+                event.preventDefault();
+                changeSelection(-1);
+            } else if (event.key === 'Enter') {
+                event.preventDefault();
+                if (selectedIndex >= 0 && selectedIndex < filteredList.length) {
+                    selectStation(filteredList[selectedIndex]);
+                } else if (filteredList.length > 0) {
+                    selectStation(filteredList[0]);
+                }
+            } else if (event.key === 'Escape') {
+                resultsDiv.style.display = 'none';
+            }
+        }
+
+        function changeSelection(direction) {
+            if (selectedIndex >= 0) {
+                const prevItem = document.getElementById('search-item-' + selectedIndex);
+                if (prevItem) prevItem.classList.remove('selected');
+            }
+
+            selectedIndex += direction;
+            if (selectedIndex < 0) selectedIndex = filteredList.length - 1;
+            if (selectedIndex >= filteredList.length) selectedIndex = 0;
+
+            const currItem = document.getElementById('search-item-' + selectedIndex);
+            if (currItem) {
+                currItem.classList.add('selected');
+                currItem.scrollIntoView({ block: 'nearest' });
+            }
+        }
+
+        function selectStation(station) {
+            document.getElementById('station-search').value = station.name;
+            document.getElementById('search-results').style.display = 'none';
+            
+            const map = {map_name};
+            map.setView([station.lat, station.lon], 14, { animate: true, duration: 1.0 });
+
+            const markerName = station.js_name;
+            if (window[markerName]) {
+                window[markerName].openPopup();
+            }
+        }
+
+        document.addEventListener('click', function(e) {
+            const container = document.querySelector('.search-container');
+            if (container && !container.contains(e.target)) {
+                document.getElementById('search-results').style.display = 'none';
+            }
+        });
+
         function toggleAllLayers(show) {
             document.querySelectorAll('.leaflet-control-layers-overlays input[type=checkbox]').forEach(function(cb) {
                 var label = cb.closest('label');
                 if (cb.checked !== show && !label.innerText.trim().startsWith('Stazioni')){
                     cb.click();
-                    } 
+                } 
             });
         }
     </script>
-    """
+    """.replace("{stations_json}", stations_json).replace("{map_name}", map_name)
     mappa.get_root().html.add_child(folium.Element(buttons_html))
  
     mappa.save(map_path)
