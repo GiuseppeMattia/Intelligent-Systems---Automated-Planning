@@ -14,7 +14,7 @@
 % (NB: this is the command for Windows Powershell environment)
 
 % RUN WITH: (Linux)
-% python3 -m clingo res/asp_encoding/trip_id.asp res/output/arrival_departure.asp res/output/encoded_time_table.asp res/asp_encoding/calendar_dates.asp res/output/fatti_pendolarismo.asp src/asp_scripts/train_types.asp src/asp_scripts/train_assignment.asp --stats=2 --quiet=1 | grep "assign_trip_train" | tr ' ' '\n' | sed 's/$/./' > res/output/prova_ottimizzazione.asp
+% python3 -m clingo res/asp_encoding/trip_id.asp res/output/arrival_departure.asp res/output/encoded_time_table.asp res/asp_encoding/calendar_dates.asp res/output/fatti_pendolarismo.asp src/asp_scripts/train_types.asp res/asp_encoding/previous_stations src/asp_scripts/train_assignment.asp --stats=2 --quiet=1 | grep "assign_trip_train" | tr ' ' '\n' | sed 's/$/./' > res/output/prova_ottimizzazione.asp
 
 
 short_calendar_dates(Trip_id, Date) :- 
@@ -23,7 +23,15 @@ short_calendar_dates(Trip_id, Date) :-
     Date < 20241223.
 
 
+% short_calendar_dates(Trip_id, Date) :- 
+%     calendar_dates(Trip_id, Date),
+%     Date >= 20250601,
+%     Date < 20250605.
+
+
 1 { assign_trip_train(Trip_id, Date, Train_id) : train(Train_id, _, _) } 1 :- short_calendar_dates(Trip_id, Date).
+
+%1 { assign_trip_train("1-4751-149-0083", 20250601, Train_id) : train(Train_id, _, _) } 1 :- short_calendar_dates("1-4751-149-0083", 20250601).
 
 
 last_station(Trip_id, Station_id) :-
@@ -79,6 +87,16 @@ allowed_trip(T1, T2) :-
     [1@1, T1, T2]
 
 
+new_station("830012810", "830012891"). % CAGLIARI S.GILLA -> CAGLIARI
+new_station("830012819", "830012890"). % Elmas Aeroporto -> CAGLIARI ELMAS
+new_station("830012808", "830012889"). % Assemini S. Lucia -> ASSEMINI
+new_station("830012809", "830012889"). % Assemini Carmine -> ASSEMINI
+new_station("830012895", "830012852"). % RUDALZA (GOLFO ARANCI) -> GOLFO ARANCI
+new_station("830012854", "830012852"). % MARINELLA (GOLFO ARANCI) -> GOLFO ARANCI
+new_station("830012902", "830012855"). % Olbia Terranova -> OLBIA
+new_station("830012896", "830012857"). % SU CANALE (MONTI) -> MONTI TELTI
+new_station("830012818", "830012802"). % PORTO TORRES MARITTIMA -> PORTO TORRES
+
 pendolarismo(S1, S2, Sum, 1) :- people(S1, _, S2, _, _, "prima delle 7,15"), Sum = #sum{C : people(S1, _, S2, _, C, "prima delle 7,15")}, S1 != S2.
 pendolarismo(S1, S2, Sum, 2) :- people(S1, _, S2, _, _, "dalle 7,15 alle 8,14"), Sum = #sum{C : people(S1, _, S2, _, C, "dalle 7,15 alle 8,14")}, S1 != S2.
 pendolarismo(S1, S2, Sum, 3) :- people(S1, _, S2, _, _, "dalle 8,15 alle 9,14"), Sum = #sum{C : people(S1, _, S2, _, C, "dalle 8,15 alle 9,14")}, S1 != S2.
@@ -119,6 +137,46 @@ max_capacity(Station_1, Station_2, Cap, Fascia) :-
     max_capacity(S1, S2, Cap, Fascia),
     Pass > Cap.
 
+
+ha_pendolarismo(S2, F, T) :- pendolarismo(S1, S2, _, F), previous_station(T, S1, S2), assign_trip_train(T, _, _), next_station_time(T, S1, _, F), 
+    not new_station(S1, _),
+    not new_station(S2, _).
+
+ha_pendolarismo(S2, F, T) :- pendolarismo(New_S1, S2, _, F), previous_station(T, New_S1, S2), assign_trip_train(T, _, _), next_station_time(T, New_S1, _, F), 
+    new_station(S1, New_S1).
+
+ha_pendolarismo(New_S2, F, T) :- pendolarismo(S1, New_S2, _, F), previous_station(T, S1, New_S2), assign_trip_train(T, _, _), next_station_time(T, S1, _, F), 
+    new_station(S2, New_S2).
+
+
+salta(Trip, S1, S2) :-
+    next_station_time(Trip, S1, S2, Fascia),
+    not ha_pendolarismo(S2, Fascia, Trip),
+    assign_trip_train(Trip, _, _),
+    not last_station(Trip, S2).
+
+
+
+allowed_next_station(Trip, S1, S2) :-
+    assign_trip_train(Trip, _, _),
+    next_station(Trip, S1, S2),
+    not salta(Trip, S1, S2).
+
+
+tot_fermate_per_trip(Tot, Trip) :- 
+    Tot = #count{S1, S2 : next_station(Trip, S1, S2), not salta(Trip, S1, S2)}, 
+    assign_trip_train(Trip, _, _).
+
+
+tot_fermate(Tot) :- Tot = #sum{F, Trip : tot_fermate_per_trip(F, Trip)}.
+
+
+
 %#show max_capacity/4.
-%#show pendolarismo/4.
-#show assign_trip_train/3.
+#show pendolarismo/4.
+#show tot_fermate_per_trip/2.
+#show tot_fermate/1.
+#show salta/3.
+#show next_station_time/4.
+#show allowed_next_station/3.
+#show ha_pendolarismo/3.
