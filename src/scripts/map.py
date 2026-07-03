@@ -399,7 +399,7 @@ def main():
     </div>
     """
     mappa.get_root().html.add_child(folium.Element(stats_html))
-    # Generazione dei dati delle stazioni per la ricerca JavaScript
+    # Generazione dei dati delle stazioni e corse per la ricerca JavaScript
     js_stations_data = []
     for sid in active_stations:
         if sid not in stations_coords:
@@ -414,7 +414,26 @@ def main():
             "lon": coords[1],
             "js_name": station_marker_js_names.get(sid, "")
         })
-    stations_json = json.dumps(js_stations_data)
+        
+    js_trips_data = []
+    for sort_key, trip_id, fg in fg_list:
+        start_name, end_name, s_time, _ = sort_key
+        e_time = ""
+        if trip_id in trip_times:
+            _, e_time = trip_times[trip_id]
+        js_trips_data.append({
+            "id": trip_id,
+            "start": start_name,
+            "end": end_name,
+            "start_time": s_time,
+            "end_time": e_time,
+            "js_name": fg.get_name()
+        })
+        
+    stations_json = json.dumps({
+        "stations": js_stations_data,
+        "trips": js_trips_data
+    })
     map_name = mappa.get_name()
 
     # Barra di ricerca e bottoni
@@ -476,7 +495,7 @@ def main():
             top: calc(100% + 6px); 
             left: 0; 
             width: 100%;
-            max-height: 240px; 
+            max-height: 260px; 
             overflow-y: auto; 
             background: white; 
             border-radius: 8px; 
@@ -484,6 +503,16 @@ def main():
             box-shadow: 0 4px 20px rgba(0,0,0,0.15); 
             display: none; 
             z-index: 10000;
+        }
+        .search-header {
+            padding: 6px 14px 4px;
+            font-size: 10px;
+            font-weight: 700;
+            color: #1E88E5;
+            background-color: #f5f5f5;
+            letter-spacing: 0.5px;
+            border-bottom: 1px solid #eee;
+            text-transform: uppercase;
         }
         .search-item {
             padding: 10px 14px;
@@ -517,7 +546,7 @@ def main():
                 display: flex; gap: 10px; align-items: center;">
         
         <div class="search-container">
-            <input type="text" id="station-search" class="search-input" placeholder="Cerca stazione per nome o ID..." 
+            <input type="text" id="station-search" class="search-input" placeholder="Cerca stazione o corsa (Trip ID)..." 
                    oninput="filterStations(this.value)"
                    onkeydown="handleSearchKey(event)">
             <svg class="search-icon" viewBox="0 0 24 24">
@@ -546,30 +575,79 @@ def main():
                 return;
             }
 
-            filteredList = stationsData.filter(station => 
+            // Filtra stazioni
+            const matchedStations = stationsData.stations.filter(station => 
                 station.name.includes(cleanQuery) || station.id.includes(cleanQuery)
-            ).slice(0, 10);
+            ).slice(0, 5);
+
+            // Filtra corse (Trip ID o stazioni nel percorso)
+            const matchedTrips = stationsData.trips.filter(trip => 
+                trip.id.toUpperCase().includes(cleanQuery) || 
+                trip.start.toUpperCase().includes(cleanQuery) || 
+                trip.end.toUpperCase().includes(cleanQuery) ||
+                (trip.start + " " + trip.end).toUpperCase().includes(cleanQuery)
+            ).slice(0, 5);
+
+            filteredList = [];
+
+            if (matchedStations.length > 0) {
+                const header = document.createElement('div');
+                header.className = 'search-header';
+                header.innerText = 'Stazioni';
+                resultsDiv.appendChild(header);
+
+                matchedStations.forEach(station => {
+                    const idx = filteredList.length;
+                    filteredList.push({ type: 'station', data: station });
+
+                    const item = document.createElement('div');
+                    item.className = 'search-item';
+                    item.id = 'search-item-' + idx;
+                    item.onclick = () => selectStation(station);
+                    
+                    const displayName = highlightMatch(station.name, cleanQuery);
+                    const displayId = highlightMatch(station.id, cleanQuery);
+
+                    item.innerHTML = `
+                        <span class="search-item-name">${displayName}</span>
+                        <span class="search-item-id">ID: ${displayId}</span>
+                    `;
+                    resultsDiv.appendChild(item);
+                });
+            }
+
+            if (matchedTrips.length > 0) {
+                const header = document.createElement('div');
+                header.className = 'search-header';
+                header.innerText = 'Corse (Trip ID)';
+                resultsDiv.appendChild(header);
+
+                matchedTrips.forEach(trip => {
+                    const idx = filteredList.length;
+                    filteredList.push({ type: 'trip', data: trip });
+
+                    const item = document.createElement('div');
+                    item.className = 'search-item';
+                    item.id = 'search-item-' + idx;
+                    item.onclick = () => selectTrip(trip);
+                    
+                    const displayId = highlightMatch(trip.id, cleanQuery);
+                    const displayStart = highlightMatch(trip.start, cleanQuery);
+                    const displayEnd = highlightMatch(trip.end, cleanQuery);
+                    const timeStr = trip.start_time ? ` [${trip.start_time} → ${trip.end_time}]` : '';
+
+                    item.innerHTML = `
+                        <span class="search-item-name">Corsa ${displayId}${timeStr}</span>
+                        <span class="search-item-id">${displayStart} &rarr; ${displayEnd}</span>
+                    `;
+                    resultsDiv.appendChild(item);
+                });
+            }
 
             if (filteredList.length === 0) {
                 resultsDiv.style.display = 'none';
                 return;
             }
-
-            filteredList.forEach((station, index) => {
-                const item = document.createElement('div');
-                item.className = 'search-item';
-                item.id = 'search-item-' + index;
-                item.onclick = () => selectStation(station);
-                
-                const displayName = highlightMatch(station.name, cleanQuery);
-                const displayId = highlightMatch(station.id, cleanQuery);
-
-                item.innerHTML = `
-                    <span class="search-item-name">${displayName}</span>
-                    <span class="search-item-id">ID: ${displayId}</span>
-                `;
-                resultsDiv.appendChild(item);
-            });
 
             resultsDiv.style.display = 'block';
         }
@@ -593,9 +671,13 @@ def main():
             } else if (event.key === 'Enter') {
                 event.preventDefault();
                 if (selectedIndex >= 0 && selectedIndex < filteredList.length) {
-                    selectStation(filteredList[selectedIndex]);
+                    const sel = filteredList[selectedIndex];
+                    if (sel.type === 'station') selectStation(sel.data);
+                    else if (sel.type === 'trip') selectTrip(sel.data);
                 } else if (filteredList.length > 0) {
-                    selectStation(filteredList[0]);
+                    const sel = filteredList[0];
+                    if (sel.type === 'station') selectStation(sel.data);
+                    else if (sel.type === 'trip') selectTrip(sel.data);
                 }
             } else if (event.key === 'Escape') {
                 resultsDiv.style.display = 'none';
@@ -629,6 +711,39 @@ def main():
             const markerName = station.js_name;
             if (window[markerName]) {
                 window[markerName].openPopup();
+            }
+        }
+
+        function selectTrip(trip) {
+            document.getElementById('station-search').value = `Corsa ${trip.id}`;
+            document.getElementById('search-results').style.display = 'none';
+            
+            const map = {map_name};
+            
+            // Spegni tutte le altre corse
+            stationsData.trips.forEach(t => {
+                const fgName = t.js_name;
+                if (window[fgName] && map.hasLayer(window[fgName])) {
+                    map.removeLayer(window[fgName]);
+                }
+            });
+
+            // Accendi e metti a fuoco la corsa selezionata
+            const selectedFg = window[trip.js_name];
+            if (selectedFg) {
+                map.addLayer(selectedFg);
+                if (selectedFg.getBounds) {
+                    map.fitBounds(selectedFg.getBounds(), { padding: [100, 100], maxZoom: 10, animate: true, duration: 1.0 });
+                }
+                
+                // Apri il popup
+                setTimeout(() => {
+                    selectedFg.eachLayer(layer => {
+                        if (layer.openPopup) {
+                            layer.openPopup();
+                        }
+                    });
+                }, 350);
             }
         }
 
