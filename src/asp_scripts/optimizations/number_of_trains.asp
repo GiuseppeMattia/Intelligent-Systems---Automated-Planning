@@ -83,8 +83,10 @@ allowed_trip(T1, T2) :-
 
 :~ assign_trip_train(T1, Date, Train),
     assign_trip_train(T2, Date, Train),
-    not allowed_trip(T1, T2).
-    [1@2, T1, T2]
+    not allowed_trip(T1, T2),
+    not allowed_trip(T2, T1).
+    [1@2, T1]
+
 
 
 new_station("830012810", "830012891"). % CAGLIARI S.GILLA -> CAGLIARI
@@ -205,7 +207,6 @@ tempo_per_trip(T, Tempo) :-
 used_train(T) :- assign_trip_train(_, _, T).
 
 :~ used_train(T). [1@1, T]
-
 
 
 

@@ -1,0 +1,2 @@
+prova_ottimizzazione: 
+	clear && python3 -m clingo res/asp_encoding/trip_id.asp res/output/arrival_departure.asp res/output/encoded_time_table.asp res/asp_encoding/calendar_dates.asp src/asp_scripts/train_assignment.asp --stats=2 | grep "assign_trip_train" | tr ' ' '\n' | sed 's/$$/./' > res/output/prova_ottimizzazione.asp
