@@ -14,7 +14,7 @@
 % (NB: this is the command for Windows Powershell environment)
 
 % RUN WITH: (Linux)
-% python3 -m clingo res/asp_encoding/trip_id.asp res/output/arrival_departure.asp res/output/encoded_time_table.asp res/asp_encoding/calendar_dates.asp res/output/fatti_pendolarismo.asp src/asp_scripts/train_types.asp res/asp_encoding/previous_stations src/asp_scripts/optimizations/number_of_trains.asp --stats=2 --quiet=1 --time-limit=300 | grep "assign_trip_train" | tr ' ' '\n' | sed 's/$/./' > res/output/prova_ottimizzazione_number.asp
+% python3 -m clingo res/asp_encoding/trip_id.asp res/output/arrival_departure.asp res/output/encoded_time_table.asp res/asp_encoding/calendar_dates.asp res/output/fatti_pendolarismo.asp src/asp_scripts/train_types.asp res/asp_encoding/previous_stations.asp src/asp_scripts/optimizations/number_of_trains.asp --stats=2 --quiet=1 --time-limit=300 | grep "assign_trip_train" | tr ' ' '\n' | sed 's/$/./' > res/output/prova_ottimizzazione_number.asp
 
 
 short_calendar_dates(Trip_id, Date) :- 
