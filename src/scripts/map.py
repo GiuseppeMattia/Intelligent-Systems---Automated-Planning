@@ -32,7 +32,7 @@ map_path = resolve_path(os.getenv("PATH_TO_MAP_OUTPUT"), "res/map.html")
 
 
 def load_stops(csv_path):
-    """dal CSV perché non le abbiamo in ASP :)"""
+    """carica le stazioni - dal CSV perché non le abbiamo in ASP :)"""
     stations_coords = {}
     stations_names = {}
 
@@ -53,6 +53,7 @@ def load_stops(csv_path):
 
 
 def load_trip_times(csv_path):
+    """Carica gli orari di partenza e arrivo e l'ordine nella sequenza per ogni trip_id dal CSV stop_times.csv"""
     trip_times = {}
     with open(csv_path, mode="r", encoding="utf-8") as f:
         reader = csv.DictReader(f)
@@ -87,7 +88,29 @@ def load_trip_times(csv_path):
     return formatted_times
 
 
+def load_trip_stops(csv_path):
+    """Carica le fermate per ogni trip_id dal CSV stop_times.csv e restituisce un dizionario trip_id -> lista di stop_id in ordine di sequenza"""
+    trip_stops = {}
+    with open(csv_path, mode="r", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            trip_id = row["trip_id"].strip()
+            stop_id = row["stop_id"].strip()
+            try:
+                seq = int(row["stop_sequence"].strip())
+            except ValueError:
+                continue
+
+            trip_stops.setdefault(trip_id, {})[seq] = stop_id
+
+    return {
+        trip_id: [seqs[seq] for seq in sorted(seqs)]
+        for trip_id, seqs in trip_stops.items()
+    }
+
+
 def load_shapes():
+    """Carica le coordinate dei shapes dal CSV shapes.csv e restituisce un dizionario shape_id -> lista di coordinate (lat, lon)"""
     shapes_path = remote_dir / "res" / "sanitized" / "shapes.csv"
     shapes_df = pd.read_csv(shapes_path)
     shapes_df = shapes_df[~shapes_df['shape_id'].astype(str).str.startswith('7')]
@@ -103,11 +126,13 @@ def load_shapes():
 
 
 def parse_asp_timetable(file_paths):
+    """Parsa i file ASP e restituisce le informazioni sulle corse, stazioni e assegnazioni dei treni."""
     first_stations = {}  # trip_id -> station_id
     next_stations = {}   # trip_id -> {station_from: station_to}
     allowed_next_stations = {}  # trip_id -> {station_from: station_to}
     skipped_edges = {}  # trip_id -> {(station_from, station_to)}
     new_station_map = {}  # old_station_id -> new_station_id
+    trip_train_assignments = {}  # trip_id -> train_id
 
     if isinstance(file_paths, (str, Path)):
         file_paths = [file_paths]
@@ -117,6 +142,7 @@ def parse_asp_timetable(file_paths):
     allowed_next_pattern = re.compile(r'allowed_next_station\("([^"]+)"\s*,\s*"([^"]+)"\s*,\s*"([^"]+)"\)')
     salta_pattern = re.compile(r'salta\("([^"]+)"\s*,\s*"([^"]+)"\s*,\s*"([^"]+)"\)')
     new_station_pattern = re.compile(r'new_station\("([^"]+)"\s*,\s*"([^"]+)"\)')
+    assign_trip_pattern = re.compile(r'assign_trip_train\("([^"]+)"\s*,\s*\d+\s*,\s*(\d+)\)')
 
     for file_path in file_paths:
         if not file_path:
@@ -160,8 +186,14 @@ def parse_asp_timetable(file_paths):
                 if m_new:
                     old_station, new_station = m_new.groups()
                     new_station_map[old_station] = new_station
+                    continue
 
-    return first_stations, next_stations, allowed_next_stations, skipped_edges, new_station_map
+                m_assign = assign_trip_pattern.search(line)
+                if m_assign:
+                    trip_id, train_id = m_assign.groups()
+                    trip_train_assignments[trip_id] = train_id
+
+    return first_stations, next_stations, allowed_next_stations, skipped_edges, new_station_map, trip_train_assignments
 
 
 def apply_station_replacements(route, new_station_map):
@@ -169,6 +201,7 @@ def apply_station_replacements(route, new_station_map):
 
 
 def reconstruct_routes(first_stations, next_stations, allowed_next_stations=None, skipped_edges=None, new_station_map=None):
+    """Ricostruisce i percorsi per ogni trip_id a partire dalle stazioni iniziali e dalle informazioni sulle stazioni successive."""
     routes = {}
     allowed_next_stations = allowed_next_stations or {}
     skipped_edges = skipped_edges or {}
@@ -192,7 +225,7 @@ def reconstruct_routes(first_stations, next_stations, allowed_next_stations=None
                 next_station = trip_edges.get(curr)
 
                 if next_station is not None and trip_id in skipped_edges and (curr, next_station) in skipped_edges[trip_id]:
-                    next_station = None
+                    next_station = trip_edges.get(next_station)
 
             if next_station is None:
                 break
@@ -219,6 +252,7 @@ def group_by_trip_id(routes):
 
 
 def get_coherent_station_ids(stations_coords, new_station_map):
+    """Restituisce l'insieme delle stazioni coerenti per la mappa, considerando le stazioni presenti in stations_coords e le sostituzioni in new_station_map."""
     old_station_ids = set(new_station_map.keys())
     coherent_station_ids = {sid for sid in stations_coords if sid not in old_station_ids}
     coherent_station_ids.update(
@@ -234,17 +268,18 @@ def main():
     print(f"Stazioni caricate da stops.csv: {len(stations_coords)}")
     
     trip_times = load_trip_times(stop_times_csv_path)
+    trip_stop_sequences = load_trip_stops(stop_times_csv_path)
     print(f"Orari caricati da stop_times.csv: {len(trip_times)}")
 
     shapes_coord = load_shapes()
     
     timetable_sources = [encoded_time_table_path]
-    if optimization_rules_path and Path(optimization_rules_path).exists():
-        timetable_sources.append(optimization_rules_path)
     if optimized_timetable_path and Path(optimized_timetable_path).exists():
         timetable_sources.append(optimized_timetable_path)
+    if optimization_rules_path and Path(optimization_rules_path).exists():
+        timetable_sources.append(optimization_rules_path)
 
-    first_stations, next_stations, allowed_next_stations, skipped_edges, new_station_map = parse_asp_timetable(timetable_sources)
+    first_stations, next_stations, allowed_next_stations, skipped_edges, new_station_map, trip_train_assignments = parse_asp_timetable(timetable_sources)
     print(
         f"Fatti ASP analizzati: first_station={len(first_stations)}, next_station={len(next_stations)}, "
         f"allowed_next_station={len(allowed_next_stations)}, skipped_edges={len(skipped_edges)}, new_station={len(new_station_map)}"
@@ -258,12 +293,28 @@ def main():
         new_station_map=new_station_map,
     )
 
+    assigned_routes = {
+        trip_id: route
+        for trip_id, route in routes.items()
+        if trip_id in trip_train_assignments and str(trip_train_assignments[trip_id]).strip()
+    }
+
     coherent_station_ids = get_coherent_station_ids(stations_coords, new_station_map)
     print(f"Stazioni coerenti per la mappa: {len(coherent_station_ids)}")
     
-    unique_paths = group_by_trip_id(routes)
-    print(f"Corse totali: {len(routes)}")
+    all_unique_paths = group_by_trip_id(routes)
+    unique_paths = group_by_trip_id(assigned_routes)
+    print(f"Corse totali: {len(assigned_routes)}")
     print(f"Percorsi unici: {len(unique_paths)}")
+
+    display_route_names = {}
+    for path_key, trips in unique_paths.items():
+        representative_trip = trips[0]
+        route_stops = trip_stop_sequences.get(representative_trip, [])
+        if len(route_stops) >= 2:
+            display_route_names[path_key] = (route_stops[0], route_stops[-1])
+        else:
+            display_route_names[path_key] = (path_key[0], path_key[-1])
     
     if not unique_paths:
         print("Nessun percorso")
@@ -318,8 +369,7 @@ def main():
 
     fg_list = []
     for path_key, trips in unique_paths.items():
-        start_id = path_key[0]
-        end_id = path_key[-1]
+        start_id, end_id = display_route_names.get(path_key, (path_key[0], path_key[-1]))
         start_name = stations_names.get(start_id, start_id).replace("STAZIONE DI ", "")
         end_name = stations_names.get(end_id, end_id).replace("STAZIONE DI ", "")
         for trip_id in trips:
@@ -339,7 +389,7 @@ def main():
     for _, trip_id, fg in fg_list:
         feature_groups[trip_id] = fg
         
-    active_stations = set()
+    active_stations = set(coherent_station_ids)
     for path_key, trips in unique_paths.items():
         start_id = path_key[0]
         end_id = path_key[-1]
@@ -409,6 +459,7 @@ def main():
         
     group_stazioni = folium.FeatureGroup(name="Stazioni", control=True)
     station_marker_js_names = {}
+    station_group_name = group_stazioni.get_name()
     
     for sid in active_stations:
         if sid not in stations_coords or sid not in coherent_station_ids:
@@ -420,8 +471,9 @@ def main():
         serving_routes = []
         for path_key, trips in unique_paths.items():
             if sid in path_key:
-                s_name = stations_names.get(path_key[0], path_key[0]).replace("Stazione di ", "")
-                e_name = stations_names.get(path_key[-1], path_key[-1]).replace("Stazione di ", "")
+                start_id, end_id = display_route_names.get(path_key, (path_key[0], path_key[-1]))
+                s_name = stations_names.get(start_id, start_id).replace("Stazione di ", "")
+                e_name = stations_names.get(end_id, end_id).replace("Stazione di ", "")
                 serving_routes.append(f"• {s_name} &rarr; {e_name} ({len(trips)} corse)")
                 
         routes_list_str = "<br>".join(serving_routes[:6])
@@ -464,7 +516,7 @@ def main():
         mappa.add_child(fg)
     mappa.add_child(group_stazioni)
     
-    folium.LayerControl(position='topright', collapsed=False).add_to(mappa)
+    folium.LayerControl(position='topright', collapsed=True).add_to(mappa)
     
     stats_html = f"""
     <div style="position: fixed; 
@@ -481,9 +533,9 @@ def main():
         
         <div style="font-size:12px; line-height: 1.6; color: #eceff1;">
             <b>Statistiche</b><br>
-            <span style="color: #ffb74d;">•</span> Corse Totali (Trip IDs): <b style="color: #fff;">{len(routes)}</b><br>
+            <span style="color: #ffb74d;">•</span> Corse Totali (Trip IDs): <b style="color: #fff;">{len(assigned_routes)}</b><br>
             <span style="color: #81c784;">•</span> Percorsi Fisici Unici: <b style="color: #fff;">{len(unique_paths)}</b><br>
-            <span style="color: #64b5f6;">•</span> Stazioni Attive: <b style="color: #fff;">{len(active_stations)}</b>
+            <span style="color: #64b5f6;">•</span> Stazioni Mostrate: <b style="color: #fff;">{len(active_stations)}</b>
         </div>
     </div>
     """
@@ -504,24 +556,44 @@ def main():
             "js_name": station_marker_js_names.get(sid, "")
         })
         
+    trip_route_stations = {}
+    trip_skipped_stations = {}
+    for trip_id, route in routes.items():
+        filtered_stations = [sid for sid in route if sid in coherent_station_ids]
+        trip_route_stations[trip_id] = filtered_stations
+        skipped_station_ids = []
+        if trip_id in skipped_edges:
+            skipped_station_ids = sorted(
+                sid for _, sid in skipped_edges[trip_id] if sid in coherent_station_ids
+            )
+        trip_skipped_stations[trip_id] = skipped_station_ids
+
     js_trips_data = []
+    train_to_trips = {}
     for sort_key, trip_id, fg in fg_list:
         start_name, end_name, s_time, _ = sort_key
         e_time = ""
         if trip_id in trip_times:
             _, e_time = trip_times[trip_id]
+        train_id = trip_train_assignments.get(trip_id, "")
+        if train_id:
+            train_to_trips.setdefault(train_id, []).append(trip_id)
         js_trips_data.append({
             "id": trip_id,
             "start": start_name,
             "end": end_name,
             "start_time": s_time,
             "end_time": e_time,
-            "js_name": fg.get_name()
+            "js_name": fg.get_name(),
+            "route_stations": trip_route_stations.get(trip_id, []),
+            "skipped_stations": trip_skipped_stations.get(trip_id, []),
+            "train_id": train_id
         })
         
     stations_json = json.dumps({
         "stations": js_stations_data,
-        "trips": js_trips_data
+        "trips": js_trips_data,
+        "train_to_trips": train_to_trips
     })
     map_name = mappa.get_name()
 
@@ -635,7 +707,7 @@ def main():
                 display: flex; gap: 10px; align-items: center;">
         
         <div class="search-container">
-            <input type="text" id="station-search" class="search-input" placeholder="Cerca stazione o corsa (Trip ID)..." 
+            <input type="text" id="station-search" class="search-input" placeholder="Cerca Stazione o Trip ID..." 
                    oninput="filterStations(this.value)"
                    onkeydown="handleSearchKey(event)">
             <svg class="search-icon" viewBox="0 0 24 24">
@@ -649,8 +721,116 @@ def main():
     </div>
     <script>
         const stationsData = {stations_json};
+        const stationGroupName = "{station_group_name}";
         let selectedIndex = -1;
         let filteredList = [];
+
+        function hideAllStationMarkers() {
+            const map = {map_name};
+            const stationGroup = window[stationGroupName];
+            if (stationGroup && map.hasLayer(stationGroup)) {
+                map.removeLayer(stationGroup);
+            }
+        }
+
+        function showAllStationMarkers() {
+            const map = {map_name};
+            stationsData.stations.forEach(station => {
+                const markerName = station.js_name;
+                const marker = window[markerName];
+                if (!marker) return;
+                setMarkerStyle(marker, false);
+                if (!map.hasLayer(marker)) {
+                    map.addLayer(marker);
+                }
+            });
+        }
+
+        function setMarkerStyle(marker, isSkipped) {
+            if (!marker || !marker.setStyle) return;
+            if (isSkipped) {
+                marker.setStyle({
+                    color: '#D32F2F',
+                    weight: 2,
+                    fillColor: '#FFCDD2',
+                    fillOpacity: 1.0,
+                    radius: 6
+                });
+            } else {
+                marker.setStyle({
+                    color: '#37474F',
+                    weight: 2,
+                    fillColor: '#FFFFFF',
+                    fillOpacity: 1.0,
+                    radius: 6
+                });
+            }
+        }
+
+        function showTripStationMarkers(routeStationIds, skippedStationIds) {
+            const map = {map_name};
+            const routeIdSet = new Set(routeStationIds || []);
+            const skippedIdSet = new Set(skippedStationIds || []);
+            stationsData.stations.forEach(station => {
+                const markerName = station.js_name;
+                const marker = window[markerName];
+                if (!marker) return;
+
+                const isRouteStation = routeIdSet.has(station.id);
+                const isSkippedStation = skippedIdSet.has(station.id);
+
+                if (isRouteStation || isSkippedStation) {
+                    setMarkerStyle(marker, isSkippedStation);
+                    if (!map.hasLayer(marker)) {
+                        map.addLayer(marker);
+                    }
+                } else if (map.hasLayer(marker)) {
+                    map.removeLayer(marker);
+                }
+            });
+        }
+
+        function getActiveTripLayers() {
+            const map = {map_name};
+            return stationsData.trips.filter(trip => {
+                const layer = window[trip.js_name];
+                return !!(layer && map.hasLayer(layer));
+            });
+        }
+
+        function syncStationsFromActiveTrips() {
+            const activeTrips = getActiveTripLayers();
+            const map = {map_name};
+            
+            if (activeTrips.length === 0) {
+                showAllStationMarkers();
+                return;
+            }
+
+            const routeIdSet = new Set();
+            const skippedIdSet = new Set();
+            activeTrips.forEach(trip => {
+                (trip.route_stations || []).forEach(stationId => routeIdSet.add(stationId));
+                (trip.skipped_stations || []).forEach(stationId => skippedIdSet.add(stationId));
+            });
+
+            stationsData.stations.forEach(station => {
+                const markerName = station.js_name;
+                const marker = window[markerName];
+                if (!marker) return;
+
+                const isRouteStation = routeIdSet.has(station.id);
+                const isSkippedStation = skippedIdSet.has(station.id);
+                if (isRouteStation || isSkippedStation) {
+                    setMarkerStyle(marker, isSkippedStation);
+                    if (!map.hasLayer(marker)) {
+                        map.addLayer(marker);
+                    }
+                } else if (map.hasLayer(marker)) {
+                    map.removeLayer(marker);
+                }
+            });
+        }
 
         function filterStations(query) {
             const resultsDiv = document.getElementById('search-results');
@@ -671,7 +851,7 @@ def main():
 
             // Filtra corse (Trip ID o stazioni nel percorso)
             const matchedTrips = stationsData.trips.filter(trip => 
-                trip.id.toUpperCase().includes(cleanQuery) || 
+                trip.id.toUpperCase().includes(cleanQuery) ||
                 trip.start.toUpperCase().includes(cleanQuery) || 
                 trip.end.toUpperCase().includes(cleanQuery) ||
                 (trip.start + " " + trip.end).toUpperCase().includes(cleanQuery)
@@ -795,7 +975,7 @@ def main():
             document.getElementById('search-results').style.display = 'none';
             
             const map = {map_name};
-            map.setView([station.lat, station.lon], 14, { animate: true, duration: 1.0 });
+            map.setView([station.lat, station.lon], 10, { animate: true, duration: 1.0 });
 
             const markerName = station.js_name;
             if (window[markerName]) {
@@ -817,15 +997,47 @@ def main():
                 }
             });
 
+            const relatedTrips = [trip];
+
+            // Mostra solo le stazioni della corsa selezionata e quelle saltate in rosso
+            const selectedStations = trip.route_stations || [];
+            const skippedStations = trip.skipped_stations || [];
+            hideAllStationMarkers();
+            showTripStationMarkers(selectedStations, skippedStations);
+            syncStationsFromActiveTrips();
+
+            // Nascondi tutte le altre tratte e lascia solo quella selezionata
+            const allTripLayerNames = stationsData.trips.map(t => t.js_name);
+            allTripLayerNames.forEach(layerName => {
+                const layer = window[layerName];
+                if (layer && map.hasLayer(layer) && layerName !== trip.js_name) {
+                    map.removeLayer(layer);
+                }
+            });
+
             // Accendi e metti a fuoco la corsa selezionata
+            relatedTrips.forEach(relatedTrip => {
+                const selectedFg = window[relatedTrip.js_name];
+                if (selectedFg && !map.hasLayer(selectedFg)) {
+                    map.addLayer(selectedFg);
+                }
+            });
+
+            if (relatedTrips.length > 0) {
+                const bounds = relatedTrips
+                    .map(rt => window[rt.js_name])
+                    .filter(Boolean)
+                    .map(layer => layer.getBounds ? layer.getBounds() : null)
+                    .filter(Boolean);
+                if (bounds.length > 0) {
+                    const combinedBounds = bounds.reduce((acc, b) => acc.extend(b), bounds[0].clone());
+                    map.fitBounds(combinedBounds, { padding: [80, 80], maxZoom: 9, animate: true, duration: 1.0 });
+                }
+            }
+
+            // Apri il popup della corsa selezionata
             const selectedFg = window[trip.js_name];
             if (selectedFg) {
-                map.addLayer(selectedFg);
-                if (selectedFg.getBounds) {
-                    map.fitBounds(selectedFg.getBounds(), { padding: [100, 100], maxZoom: 10, animate: true, duration: 1.0 });
-                }
-                
-                // Apri il popup
                 setTimeout(() => {
                     selectedFg.eachLayer(layer => {
                         if (layer.openPopup) {
@@ -843,6 +1055,18 @@ def main():
             }
         });
 
+        document.addEventListener('change', function(e) {
+            const checkbox = e.target;
+            if (!checkbox.matches('.leaflet-control-layers-overlays input[type="checkbox"]')) return;
+
+            const label = checkbox.closest('label');
+            if (!label) return;
+            const labelText = label.innerText.trim();
+            if (!labelText || labelText.startsWith('Stazioni')) return;
+
+            setTimeout(syncStationsFromActiveTrips, 0);
+        });
+
         function toggleAllLayers(show) {
             document.querySelectorAll('.leaflet-control-layers-overlays input[type=checkbox]').forEach(function(cb) {
                 var label = cb.closest('label');
@@ -852,7 +1076,7 @@ def main():
             });
         }
     </script>
-    """.replace("{stations_json}", stations_json).replace("{map_name}", map_name)
+    """.replace("{stations_json}", stations_json).replace("{map_name}", map_name).replace("{station_group_name}", station_group_name)
     mappa.get_root().html.add_child(folium.Element(buttons_html))
  
     mappa.save(map_path)

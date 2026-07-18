@@ -152,6 +152,8 @@ ha_pendolarismo(New_S2, F, T) :- pendolarismo(S1, New_S2, _, F), previous_statio
 
 
 salta(Trip, S1, S2) :-
+    not new_station(S1, _),
+    not new_station(S2, _),
     next_station_time(Trip, S1, S2, Fascia),
     not ha_pendolarismo(S2, Fascia, Trip),
     assign_trip_train(Trip, _, _),
