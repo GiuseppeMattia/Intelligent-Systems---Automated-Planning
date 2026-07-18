@@ -53,7 +53,7 @@ def load_stops(csv_path):
 
 
 def load_trip_times(csv_path):
-    """Carica gli orari di partenza e arrivo e l'ordine nella sequenza per ogni trip_id dal CSV stop_times.csv"""
+    """Carica gli orari di partenza e arrivo e l'ordine nella sequenza per ogni trip_id da stop_times.csv"""
     trip_times = {}
     with open(csv_path, mode="r", encoding="utf-8") as f:
         reader = csv.DictReader(f)
@@ -89,7 +89,7 @@ def load_trip_times(csv_path):
 
 
 def load_trip_stops(csv_path):
-    """Carica le fermate per ogni trip_id dal CSV stop_times.csv e restituisce un dizionario trip_id -> lista di stop_id in ordine di sequenza"""
+    """Carica le fermate per ogni trip_id da stop_times.csv"""
     trip_stops = {}
     with open(csv_path, mode="r", encoding="utf-8") as f:
         reader = csv.DictReader(f)
@@ -110,7 +110,7 @@ def load_trip_stops(csv_path):
 
 
 def load_shapes():
-    """Carica le coordinate dei shapes dal CSV shapes.csv e restituisce un dizionario shape_id -> lista di coordinate (lat, lon)"""
+    """Carica le coordinate dei shapes da shapes.csv"""
     shapes_path = remote_dir / "res" / "sanitized" / "shapes.csv"
     shapes_df = pd.read_csv(shapes_path)
     shapes_df = shapes_df[~shapes_df['shape_id'].astype(str).str.startswith('7')]
@@ -126,7 +126,7 @@ def load_shapes():
 
 
 def parse_asp_timetable(file_paths):
-    """Parsa i file ASP e restituisce le informazioni sulle corse, stazioni e assegnazioni dei treni."""
+    """Parsa i file ASP e restituisce informazioni sulle corse, stazioni e assegnazioni dei treni."""
     first_stations = {}  # trip_id -> station_id
     next_stations = {}   # trip_id -> {station_from: station_to}
     allowed_next_stations = {}  # trip_id -> {station_from: station_to}
@@ -239,7 +239,7 @@ def reconstruct_routes(first_stations, next_stations, allowed_next_stations=None
 
 
 def group_by_trip_id(routes):
-    """Raggruppa i trip_id che hanno lo stesso percorso fisico (sequenza di stazioni)."""
+    """Raggruppa i trip_id che hanno lo stesso percorso (sequenza di stazioni)."""
     unique_paths = {}
     for trip_id, path in routes.items():
         if not path:
@@ -540,7 +540,7 @@ def main():
     </div>
     """
     mappa.get_root().html.add_child(folium.Element(stats_html))
-    # Generazione dei dati delle stazioni e corse per la ricerca JavaScript
+    
     js_stations_data = []
     for sid in active_stations:
         if sid not in stations_coords or sid not in coherent_station_ids:
@@ -849,7 +849,7 @@ def main():
                 station.name.includes(cleanQuery) || station.id.includes(cleanQuery)
             ).slice(0, 5);
 
-            // Filtra corse (Trip ID o stazioni nel percorso)
+            // Filtra corse
             const matchedTrips = stationsData.trips.filter(trip => 
                 trip.id.toUpperCase().includes(cleanQuery) ||
                 trip.start.toUpperCase().includes(cleanQuery) || 
@@ -1015,7 +1015,7 @@ def main():
                 }
             });
 
-            // Accendi e metti a fuoco la corsa selezionata
+            // corsa selezionata
             relatedTrips.forEach(relatedTrip => {
                 const selectedFg = window[relatedTrip.js_name];
                 if (selectedFg && !map.hasLayer(selectedFg)) {
@@ -1035,7 +1035,7 @@ def main():
                 }
             }
 
-            // Apri il popup della corsa selezionata
+            // popup della corsa selezionata
             const selectedFg = window[trip.js_name];
             if (selectedFg) {
                 setTimeout(() => {
