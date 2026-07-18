@@ -211,15 +211,15 @@ tempo_per_trip(T, Tempo) :-
 % minimizzare il numero di treni
 
 
-%#show max_capacity/4.
-#show tempo_per_trip/2.
-#show tempo_rest/3.
-#show pendolarismo/4.
-#show tot_fermate_per_trip/2.
-#show tot_fermate/1.
-#show salta/3.
-#show next_station_time/4.
-#show allowed_next_station/3.
-#show ha_pendolarismo/3.
-#show tempo_impegato/4.
+% #show max_capacity/4.
+% #show tempo_per_trip/2.
+% #show tempo_rest/3.
+% #show pendolarismo/4.
+% #show tot_fermate_per_trip/2.
+% #show tot_fermate/1.
+% #show salta/3.
+% #show next_station_time/4.
+% #show allowed_next_station/3.
+% #show ha_pendolarismo/3.
+% #show tempo_impegato/4.
 #show assign_trip_train/3.
