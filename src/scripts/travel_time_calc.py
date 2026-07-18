@@ -11,7 +11,6 @@ between the minimum and maximum direct segment duration, expressed in integer mi
 
 from __future__ import annotations
 
-import argparse
 import csv
 import re
 from collections import defaultdict
