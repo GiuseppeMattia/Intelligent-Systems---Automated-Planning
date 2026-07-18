@@ -26,8 +26,9 @@ def resolve_path(env_path, default_relative):
 stops_csv_path = resolve_path(os.getenv("PATH_TO_STOPS_CSV"), "res/sanitized/stops.csv")
 stop_times_csv_path = resolve_path(os.getenv("PATH_TO_STOP_TIMES_CSV"), "res/sanitized/stop_times.csv")
 encoded_time_table_path = resolve_path(os.getenv("PATH_TO_ENCODED_TIME_TABLE_ASP"), "res/asp_encoding/encoded_time_table.asp")
+optimized_timetable_path = resolve_path(os.getenv("PATH_TO_OPTIMIZED_TIMETABLE_ASP"), "res/output/prova_ottimizzazione_number.asp")
+optimization_rules_path = resolve_path(os.getenv("PATH_TO_OPTIMIZATION_RULES_ASP"), "src/asp_scripts/optimizations/number_of_trains.asp")
 map_path = resolve_path(os.getenv("PATH_TO_MAP_OUTPUT"), "res/map.html")
-
 
 
 def load_stops(csv_path):
@@ -101,46 +102,106 @@ def load_shapes():
     return shapes_dict
 
 
-def parse_asp_timetable(file_path):
+def parse_asp_timetable(file_paths):
     first_stations = {}  # trip_id -> station_id
     next_stations = {}   # trip_id -> {station_from: station_to}
-    
+    allowed_next_stations = {}  # trip_id -> {station_from: station_to}
+    skipped_edges = {}  # trip_id -> {(station_from, station_to)}
+    new_station_map = {}  # old_station_id -> new_station_id
+
+    if isinstance(file_paths, (str, Path)):
+        file_paths = [file_paths]
+
     first_pattern = re.compile(r'first_station\("([^"]+)"\s*,\s*"([^"]+)"\)')
     next_pattern = re.compile(r'next_station\("([^"]+)"\s*,\s*"([^"]+)"\s*,\s*"([^"]+)"\)')
+    allowed_next_pattern = re.compile(r'allowed_next_station\("([^"]+)"\s*,\s*"([^"]+)"\s*,\s*"([^"]+)"\)')
+    salta_pattern = re.compile(r'salta\("([^"]+)"\s*,\s*"([^"]+)"\s*,\s*"([^"]+)"\)')
+    new_station_pattern = re.compile(r'new_station\("([^"]+)"\s*,\s*"([^"]+)"\)')
 
-    with open(file_path, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("%"):
-                continue
-                
-            m_first = first_pattern.search(line)
-            if m_first:
-                trip_id, station_id = m_first.groups()
-                first_stations[trip_id] = station_id
-                continue
-                
-            m_next = next_pattern.search(line)
-            if m_next:
-                trip_id, station_from, station_to = m_next.groups()
-                if trip_id not in next_stations:
-                    next_stations[trip_id] = {}
-                next_stations[trip_id][station_from] = station_to
-                
-    return first_stations, next_stations
+    for file_path in file_paths:
+        if not file_path:
+            continue
+
+        resolved_path = Path(file_path)
+        if not resolved_path.exists():
+            continue
+
+        with open(resolved_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("%"):
+                    continue
+
+                m_first = first_pattern.search(line)
+                if m_first:
+                    trip_id, station_id = m_first.groups()
+                    first_stations[trip_id] = station_id
+                    continue
+
+                m_next = next_pattern.search(line)
+                if m_next:
+                    trip_id, station_from, station_to = m_next.groups()
+                    next_stations.setdefault(trip_id, {})[station_from] = station_to
+                    continue
+
+                m_allowed = allowed_next_pattern.search(line)
+                if m_allowed:
+                    trip_id, station_from, station_to = m_allowed.groups()
+                    allowed_next_stations.setdefault(trip_id, {})[station_from] = station_to
+                    continue
+
+                m_skip = salta_pattern.search(line)
+                if m_skip:
+                    trip_id, station_from, station_to = m_skip.groups()
+                    skipped_edges.setdefault(trip_id, set()).add((station_from, station_to))
+                    continue
+
+                m_new = new_station_pattern.search(line)
+                if m_new:
+                    old_station, new_station = m_new.groups()
+                    new_station_map[old_station] = new_station
+
+    return first_stations, next_stations, allowed_next_stations, skipped_edges, new_station_map
 
 
-def reconstruct_routes(first_stations, next_stations):
+def apply_station_replacements(route, new_station_map):
+    return [new_station_map.get(station_id, station_id) for station_id in route]
+
+
+def reconstruct_routes(first_stations, next_stations, allowed_next_stations=None, skipped_edges=None, new_station_map=None):
     routes = {}
+    allowed_next_stations = allowed_next_stations or {}
+    skipped_edges = skipped_edges or {}
+    new_station_map = new_station_map or {}
+
     for trip_id, start_station in first_stations.items():
         route = []
         curr = start_station
         visited = set()
-        while curr and curr not in visited:  
+        while curr and curr not in visited:
             visited.add(curr)
             route.append(curr)
-            curr = next_stations.get(trip_id, {}).get(curr)
-        routes[trip_id] = route
+
+            next_station = None
+            trip_allowed_edges = allowed_next_stations.get(trip_id, {})
+            if trip_allowed_edges:
+                next_station = trip_allowed_edges.get(curr)
+
+            if next_station is None:
+                trip_edges = next_stations.get(trip_id, {})
+                next_station = trip_edges.get(curr)
+
+                if next_station is not None and trip_id in skipped_edges and (curr, next_station) in skipped_edges[trip_id]:
+                    next_station = None
+
+            if next_station is None:
+                break
+
+            curr = next_station
+
+        if route:
+            routes[trip_id] = apply_station_replacements(route, new_station_map)
+
     return routes
 
 
@@ -157,6 +218,15 @@ def group_by_trip_id(routes):
     return unique_paths
 
 
+def get_coherent_station_ids(stations_coords, new_station_map):
+    old_station_ids = set(new_station_map.keys())
+    coherent_station_ids = {sid for sid in stations_coords if sid not in old_station_ids}
+    coherent_station_ids.update(
+        sid for sid in new_station_map.values() if sid in stations_coords
+    )
+    return coherent_station_ids
+
+
 def main():
     print("Inizio elaborazione dati...")
     
@@ -168,10 +238,28 @@ def main():
 
     shapes_coord = load_shapes()
     
-    first_stations, next_stations = parse_asp_timetable(encoded_time_table_path)
-    print(f"Fatti ASP analizzati: first_station={len(first_stations)}, next_station={len(next_stations)}")
-    
-    routes = reconstruct_routes(first_stations, next_stations)
+    timetable_sources = [encoded_time_table_path]
+    if optimization_rules_path and Path(optimization_rules_path).exists():
+        timetable_sources.append(optimization_rules_path)
+    if optimized_timetable_path and Path(optimized_timetable_path).exists():
+        timetable_sources.append(optimized_timetable_path)
+
+    first_stations, next_stations, allowed_next_stations, skipped_edges, new_station_map = parse_asp_timetable(timetable_sources)
+    print(
+        f"Fatti ASP analizzati: first_station={len(first_stations)}, next_station={len(next_stations)}, "
+        f"allowed_next_station={len(allowed_next_stations)}, skipped_edges={len(skipped_edges)}, new_station={len(new_station_map)}"
+    )
+
+    routes = reconstruct_routes(
+        first_stations,
+        next_stations,
+        allowed_next_stations=allowed_next_stations,
+        skipped_edges=skipped_edges,
+        new_station_map=new_station_map,
+    )
+
+    coherent_station_ids = get_coherent_station_ids(stations_coords, new_station_map)
+    print(f"Stazioni coerenti per la mappa: {len(coherent_station_ids)}")
     
     unique_paths = group_by_trip_id(routes)
     print(f"Corse totali: {len(routes)}")
@@ -258,9 +346,10 @@ def main():
 
         valid_path_station_names = []
         for sid in path_key:
-            if sid in stations_coords:
-                valid_path_station_names.append(stations_names.get(sid, sid).replace("Stazione di ", ""))
-                active_stations.add(sid)
+            if sid not in stations_coords or sid not in coherent_station_ids:
+                continue
+            valid_path_station_names.append(stations_names.get(sid, sid).replace("Stazione di ", ""))
+            active_stations.add(sid)
                 
         representative_trip = trips[0]
         
@@ -322,7 +411,7 @@ def main():
     station_marker_js_names = {}
     
     for sid in active_stations:
-        if sid not in stations_coords:
+        if sid not in stations_coords or sid not in coherent_station_ids:
             continue
         coords = stations_coords[sid]
         name = stations_names.get(sid, sid)
@@ -402,7 +491,7 @@ def main():
     # Generazione dei dati delle stazioni e corse per la ricerca JavaScript
     js_stations_data = []
     for sid in active_stations:
-        if sid not in stations_coords:
+        if sid not in stations_coords or sid not in coherent_station_ids:
             continue
         coords = stations_coords[sid]
         name = stations_names.get(sid, sid)
