@@ -34,14 +34,46 @@ short_calendar_dates(Trip_id, Date) :-
 %% 1 { assign_trip_train("1-4751-149-0083", 20250601, Train_id) : train(Train_id, _, _) } 1 :- short_calendar_dates("1-4751-149-0083", 20250601).
 
 
+abolita(S) :- new_station(S, _).
+
+collegamento(Trip, S1, S2) :- next_station(Trip, S1, S2).
+collegamento(Trip, S1, S3) :- 
+    collegamento(Trip, S1, S2), 
+    abolita(S2), 
+    next_station(Trip, S2, S3).
+
+effective_next_station(Trip, S1, S2) :- 
+    collegamento(Trip, S1, S2), 
+    not abolita(S1), 
+    not abolita(S2).
+
+effective_first_station(Trip, S) :- 
+    first_station(Trip, S), 
+    not abolita(S).
+effective_first_station(Trip, S2) :- 
+    first_station(Trip, S1), 
+    abolita(S1), 
+    collegamento(Trip, S1, S2), 
+    not abolita(S2).
+
+actual_station(Old, New) :- new_station(Old, New).
+actual_station(S, S) :- pendolarismo(S, _, _, _), not abolita(S).
+actual_station(S, S) :- pendolarismo(_, S, _, _), not abolita(S).
+
+effective_pendolarismo(Real_S1, Real_S2, Pass, Fascia) :-
+    pendolarismo(S1, S2, Pass, Fascia),
+    actual_station(S1, Real_S1),
+    actual_station(S2, Real_S2).
+
+
 last_station(Trip_id, Station_id) :-
     trip_id(Trip_id),
-    next_station(Trip_id, _, Station_id),
-    not next_station(Trip_id, Station_id, _).
+    effective_next_station(Trip_id, _, Station_id),
+    not effective_next_station(Trip_id, Station_id, _).
 
 trip_departure_time(Trip_id, Time) :-
     trip_id(Trip_id),
-    first_station(Trip_id, Station_id),
+    effective_first_station(Trip_id, Station_id),
     departure_time(Trip_id, Station_id, Time).
 
 trip_arrival_time(Trip_id, Time) :-
@@ -75,7 +107,7 @@ allowed_trip(T1, T2) :-
     short_calendar_dates(T2, Date),
     T1 != T2,
     last_station(T1, Station), 
-    first_station(T2, Station),
+    effective_first_station(T2, Station),
     trip_departure_time(T2, Dep),
     trip_arrival_time(T1, Arr),
     Dep >= Arr.                  
@@ -107,53 +139,47 @@ pendolarismo(S1, S2, Sum, 4) :- people(S1, _, S2, _, _, "dopo le 9,14"), Sum = #
 
 
 next_station_time(Trip, Station_1, Station_2, 1) :- 
-    next_station(Trip, Station_1, Station_2),
+    effective_next_station(Trip, Station_1, Station_2),
     departure_time(Trip, Station_1, Time),
     Time < 435.
 
 next_station_time(Trip, Station_1, Station_2, 2) :- 
-    next_station(Trip, Station_1, Station_2),
+    effective_next_station(Trip, Station_1, Station_2),
     departure_time(Trip, Station_1, Time),
     Time >= 435,
     Time < 495.
 
 next_station_time(Trip, Station_1, Station_2, 3) :- 
-    next_station(Trip, Station_1, Station_2),
+    effective_next_station(Trip, Station_1, Station_2),
     departure_time(Trip, Station_1, Time),
     Time >= 495,
     Time < 554.
 
 next_station_time(Trip, Station_1, Station_2, 4) :- 
-    next_station(Trip, Station_1, Station_2),
+    effective_next_station(Trip, Station_1, Station_2),
     departure_time(Trip, Station_1, Time),
     Time >= 554.
 
 
 max_capacity(Station_1, Station_2, Cap, Fascia) :-
-    pendolarismo(Station_1, Station_2, _, Fascia),
+    effective_pendolarismo(Station_1, Station_2, _, Fascia),
     Cap = #sum{C, Trip : next_station_time(Trip, Station_1, Station_2, Fascia), assign_trip_train(Trip, _, Train), train(Train, _, C)},
     Cap > 0.
 
 
-:- pendolarismo(S1, S2, Pass, Fascia),
+:- effective_pendolarismo(S1, S2, Pass, Fascia),
     max_capacity(S1, S2, Cap, Fascia),
     Pass > Cap.
 
 
-ha_pendolarismo(S2, F, T) :- pendolarismo(S1, S2, _, F), previous_station(T, S1, S2), assign_trip_train(T, _, _), next_station_time(T, S1, _, F), 
-    not new_station(S1, _),
-    not new_station(S2, _).
-
-ha_pendolarismo(S2, F, T) :- pendolarismo(New_S1, S2, _, F), previous_station(T, New_S1, S2), assign_trip_train(T, _, _), next_station_time(T, New_S1, _, F), 
-    new_station(S1, New_S1).
-
-ha_pendolarismo(New_S2, F, T) :- pendolarismo(S1, New_S2, _, F), previous_station(T, S1, New_S2), assign_trip_train(T, _, _), next_station_time(T, S1, _, F), 
-    new_station(S2, New_S2).
+ha_pendolarismo(S2, Fascia, Trip) :- 
+    effective_pendolarismo(S1, S2, _, Fascia), 
+    assign_trip_train(Trip, _, _), 
+    effective_next_station(Trip, S1, S2), 
+    next_station_time(Trip, S1, _, Fascia).
 
 
 salta(Trip, S1, S2) :-
-    not new_station(S1, _),
-    not new_station(S2, _),
     next_station_time(Trip, S1, S2, Fascia),
     not ha_pendolarismo(S2, Fascia, Trip),
     assign_trip_train(Trip, _, _),
@@ -163,12 +189,12 @@ salta(Trip, S1, S2) :-
 
 allowed_next_station(Trip, S1, S2) :-
     assign_trip_train(Trip, _, _),
-    next_station(Trip, S1, S2),
+    effective_next_station(Trip, S1, S2),
     not salta(Trip, S1, S2).
 
 
 tot_fermate_per_trip(Tot, Trip) :- 
-    Tot = #count{S1, S2 : next_station(Trip, S1, S2), not salta(Trip, S1, S2)}, 
+    Tot = #count{S1, S2 : effective_next_station(Trip, S1, S2), not salta(Trip, S1, S2)}, 
     assign_trip_train(Trip, _, _).
 
 
@@ -178,7 +204,7 @@ tot_fermate(Tot) :- Tot = #sum{F, Trip : tot_fermate_per_trip(F, Trip)}.
 
 tempo_impegato(T, S1, S2, Tempo) :-
     assign_trip_train(T, _, _),
-    next_station(T, S1, S2),
+    effective_next_station(T, S1, S2),
     departure_time(T, S1, Start),
     arrival_time(T, S2, End),
     Tempo = End - Start.
@@ -187,8 +213,8 @@ tempo_impegato(T, S1, S2, Tempo) :-
 tempo_rest(T, S2, Tempo) :-
     assign_trip_train(T, _, _),
     not salta(T, S1, S2),
-    next_station(T, S1, S2),
-    not first_station(T, S2),
+    effective_next_station(T, S1, S2),
+    not effective_first_station(T, S2),
     not last_station(T, S2),
     arrival_time(T, S2, Start),
     departure_time(T, S2, End),
@@ -222,21 +248,42 @@ used_train(T) :- assign_trip_train(_, _, T).
 % vedere il tempo risparmiato
 % minimizzare il numero di treni
 
+% different_first_station(T,S) :- first_station(T,S1), effective_first_station(T ,S), S != S1.
+% tot_different_first_station(Tot) :- Tot = #count{T, S : different_first_station(T,S)}.
+
+
+% different_next_station(T,S1,S2) :- next_station(T,S1,S2), effective_next_station(T,S1',S2'), S1!=S1', S2!=S2'.
+% different_next_station(T,S1,S2) :- next_station(T,S1,S2), effective_next_station(T,S1,S2'), S2!=S2'.
+% different_next_station(T,S1,S2) :- next_station(T,S1,S2), effective_next_station(T,S1',S2), S1!=S1'.
+
+% tot_different_next_station(Tot) :- Tot = #count{T, S1, S2 : different_next_station(T,S1,S2)}.
+
 
 % #show max_capacity/4.
 % #show used_train/1.
 % #show tempo_per_trip/2.
 % #show tempo_rest/3.
 % #show pendolarismo/4.
-% #show tot_fermate_per_trip/2.
 % #show tot_fermate/1.
-% #show salta/3.
 % #show next_station_time/4.
-% #show allowed_next_station/3.
 % #show ha_pendolarismo/3.
-% #show tempo_impegato/4.
 % #show allowed_trip/2.
+% #show first_station/2.
+% #show next_station/3.
+% #show tot_fermate_per_trip/2.
+% #show tempo_impegato/4.
+
 #show assign_trip_train/3.
+#show effective_first_station/2.
+#show last_station/2.
 #show allowed_next_station/3.
+#show effective_next_station/3.
 #show salta/3.
 #show new_station/2.
+#show trip_departure_time/2.
+#show trip_arrival_time/2.
+#show departure_time/3.
+#show arrival_time/3.
+
+% #show tot_different_first_station/1.
+% #show tot_different_next_station/1.

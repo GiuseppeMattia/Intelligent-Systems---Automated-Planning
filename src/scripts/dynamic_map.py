@@ -101,46 +101,184 @@ def load_shapes():
     return shapes_dict
 
 
-def parse_asp_timetable(file_path):
+def format_time_minutes(t):
+    try:
+        minutes = int(str(t).strip('"'))
+        hours = (minutes // 60) % 24
+        mins = minutes % 60
+        return f"{hours:02d}:{mins:02d}"
+    except (ValueError, TypeError):
+        return str(t).strip('"')
+
+
+def parse_asp_timetable(file_paths):
     first_stations = {}  # trip_id -> station_id
+    last_stations = {}   # trip_id -> station_id
     next_stations = {}   # trip_id -> {station_from: station_to}
-    
+    allowed_next_stations = {}  # trip_id -> {station_from: station_to}
+    skipped_edges = {}  # trip_id -> {(station_from, station_to)}
+    new_station_map = {}  # old_station_id -> new_station_id
+    trip_train_assignments = {}  # trip_id -> train_id
+    trip_dep_times = {}  # trip_id -> dep_time_str
+    trip_arr_times = {}  # trip_id -> arr_time_str
+    station_dep_times = {}  # trip_id -> {station_id: dep_time_str}
+    station_arr_times = {}  # trip_id -> {station_id: arr_time_str}
+
+    if isinstance(file_paths, (str, Path)):
+        file_paths = [file_paths]
+
     first_pattern = re.compile(r'first_station\("([^"]+)"\s*,\s*"([^"]+)"\)')
+    last_pattern = re.compile(r'last_station\("([^"]+)"\s*,\s*"([^"]+)"\)')
     next_pattern = re.compile(r'next_station\("([^"]+)"\s*,\s*"([^"]+)"\s*,\s*"([^"]+)"\)')
+    allowed_next_pattern = re.compile(r'allowed_next_station\("([^"]+)"\s*,\s*"([^"]+)"\s*,\s*"([^"]+)"\)')
+    salta_pattern = re.compile(r'salta\("([^"]+)"\s*,\s*"([^"]+)"\s*,\s*"([^"]+)"\)')
+    new_station_pattern = re.compile(r'new_station\("([^"]+)"\s*,\s*"([^"]+)"\)')
+    assign_trip_pattern = re.compile(r'assign_trip_train\("([^"]+)"\s*,\s*\d+\s*,\s*(\d+)\)')
+    trip_dep_pattern = re.compile(r'trip_departure_time\("([^"]+)"\s*,\s*(\d+|"[^"]+")\)')
+    trip_arr_pattern = re.compile(r'trip_arrival_time\("([^"]+)"\s*,\s*(\d+|"[^"]+")\)')
+    station_dep_pattern = re.compile(r'departure_time\("([^"]+)"\s*,\s*"([^"]+)"\s*,\s*(\d+|"[^"]+")\)')
+    station_arr_pattern = re.compile(r'arrival_time\("([^"]+)"\s*,\s*"([^"]+)"\s*,\s*(\d+|"[^"]+")\)')
 
-    with open(file_path, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("%"):
-                continue
-                
-            m_first = first_pattern.search(line)
-            if m_first:
-                trip_id, station_id = m_first.groups()
-                first_stations[trip_id] = station_id
-                continue
-                
-            m_next = next_pattern.search(line)
-            if m_next:
-                trip_id, station_from, station_to = m_next.groups()
-                if trip_id not in next_stations:
-                    next_stations[trip_id] = {}
-                next_stations[trip_id][station_from] = station_to
-                
-    return first_stations, next_stations
+    for file_path in file_paths:
+        if not file_path:
+            continue
+
+        resolved_path = Path(file_path)
+        if not resolved_path.exists():
+            continue
+
+        with open(resolved_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("%"):
+                    continue
+
+                m_first = first_pattern.search(line)
+                if m_first:
+                    trip_id, station_id = m_first.groups()
+                    first_stations[trip_id] = station_id
+                    continue
+
+                m_last = last_pattern.search(line)
+                if m_last:
+                    trip_id, station_id = m_last.groups()
+                    last_stations[trip_id] = station_id
+                    continue
+
+                m_next = next_pattern.search(line)
+                if m_next:
+                    trip_id, station_from, station_to = m_next.groups()
+                    next_stations.setdefault(trip_id, {})[station_from] = station_to
+                    continue
+
+                m_allowed = allowed_next_pattern.search(line)
+                if m_allowed:
+                    trip_id, station_from, station_to = m_allowed.groups()
+                    allowed_next_stations.setdefault(trip_id, {})[station_from] = station_to
+                    continue
+
+                m_skip = salta_pattern.search(line)
+                if m_skip:
+                    trip_id, station_from, station_to = m_skip.groups()
+                    skipped_edges.setdefault(trip_id, set()).add((station_from, station_to))
+                    continue
+
+                m_new = new_station_pattern.search(line)
+                if m_new:
+                    old_station, new_station = m_new.groups()
+                    new_station_map[old_station] = new_station
+                    continue
+
+                m_assign = assign_trip_pattern.search(line)
+                if m_assign:
+                    trip_id, train_id = m_assign.groups()
+                    trip_train_assignments[trip_id] = train_id
+                    continue
+
+                m_tdep = trip_dep_pattern.search(line)
+                if m_tdep:
+                    trip_id, t_val = m_tdep.groups()
+                    trip_dep_times[trip_id] = format_time_minutes(t_val)
+                    continue
+
+                m_tarr = trip_arr_pattern.search(line)
+                if m_tarr:
+                    trip_id, t_val = m_tarr.groups()
+                    trip_arr_times[trip_id] = format_time_minutes(t_val)
+                    continue
+
+                m_sdep = station_dep_pattern.search(line)
+                if m_sdep:
+                    trip_id, station_id, t_val = m_sdep.groups()
+                    station_dep_times.setdefault(trip_id, {})[station_id] = format_time_minutes(t_val)
+                    continue
+
+                m_sarr = station_arr_pattern.search(line)
+                if m_sarr:
+                    trip_id, station_id, t_val = m_sarr.groups()
+                    station_arr_times.setdefault(trip_id, {})[station_id] = format_time_minutes(t_val)
+                    continue
+
+    trip_times = {}
+    all_trips = set(first_stations.keys()).union(trip_dep_times.keys()).union(trip_arr_times.keys())
+    for trip_id in all_trips:
+        dep = trip_dep_times.get(trip_id)
+        if dep is None and trip_id in first_stations:
+            first_st = first_stations[trip_id]
+            dep = station_dep_times.get(trip_id, {}).get(first_st)
+
+        arr = trip_arr_times.get(trip_id)
+        if arr is None and trip_id in last_stations:
+            last_st = last_stations[trip_id]
+            arr = station_arr_times.get(trip_id, {}).get(last_st)
+
+        if dep or arr:
+            trip_times[trip_id] = (dep or "", arr or "")
+
+    return (
+        first_stations,
+        next_stations,
+        allowed_next_stations,
+        skipped_edges,
+        new_station_map,
+        trip_train_assignments,
+        trip_times
+    )
 
 
-def reconstruct_routes(first_stations, next_stations):
+def reconstruct_routes(first_stations, next_stations, allowed_next_stations=None, skipped_edges=None, new_station_map=None):
     routes = {}
+    allowed_next_stations = allowed_next_stations or {}
+    skipped_edges = skipped_edges or {}
+    new_station_map = new_station_map or {}
+
     for trip_id, start_station in first_stations.items():
         route = []
         curr = start_station
         visited = set()
-        while curr and curr not in visited:  
+        while curr and curr not in visited:
             visited.add(curr)
             route.append(curr)
-            curr = next_stations.get(trip_id, {}).get(curr)
-        routes[trip_id] = route
+
+            next_station = None
+            trip_allowed_edges = allowed_next_stations.get(trip_id, {})
+            if trip_allowed_edges:
+                next_station = trip_allowed_edges.get(curr)
+
+            if next_station is None:
+                trip_edges = next_stations.get(trip_id, {})
+                next_station = trip_edges.get(curr)
+
+                if next_station is not None and trip_id in skipped_edges and (curr, next_station) in skipped_edges[trip_id]:
+                    next_station = trip_edges.get(next_station)
+
+            if next_station is None:
+                break
+
+            curr = next_station
+
+        if route:
+            routes[trip_id] = [new_station_map.get(sid, sid) for sid in route]
     return routes
 
 
@@ -159,20 +297,44 @@ def group_by_trip_id(routes):
 
 def main():
     print("Inizio elaborazione dati...")
-    
+
     stations_coords, stations_names = load_stops(stops_csv_path)
     print(f"Stazioni caricate da stops.csv: {len(stations_coords)}")
-    
-    trip_times = load_trip_times(stop_times_csv_path)
-    print(f"Orari caricati da stop_times.csv: {len(trip_times)}")
 
-    # shapes_coord = load_shapes()
-    
-    first_stations, next_stations = parse_asp_timetable(encoded_time_table_path)
-    print(f"Fatti ASP analizzati: first_station={len(first_stations)}, next_station={len(next_stations)}")
-    
-    routes = reconstruct_routes(first_stations, next_stations)
-    
+    timetable_sources = []
+    opt_number_path = resolve_path(os.getenv("PATH_TO_OPTIMIZED_NUMBER_ASP"), "res/output/prova_ottimizzazione_number.asp")
+    if opt_number_path and Path(opt_number_path).exists():
+        timetable_sources.append(opt_number_path)
+    encoded_tt_path = resolve_path(os.getenv("PATH_TO_ENCODED_TIME_TABLE_ASP"), "res/asp_encoding/encoded_time_table.asp")
+    if encoded_tt_path and Path(encoded_tt_path).exists():
+        timetable_sources.append(encoded_tt_path)
+    arr_dep_path = resolve_path(os.getenv("PATH_TO_ARRIVAL_DEPARTURE_ASP"), "res/output/arrival_departure.asp")
+    if arr_dep_path and Path(arr_dep_path).exists():
+        timetable_sources.append(arr_dep_path)
+
+    (
+        first_stations,
+        next_stations,
+        allowed_next_stations,
+        skipped_edges,
+        new_station_map,
+        trip_train_assignments,
+        trip_times
+    ) = parse_asp_timetable(timetable_sources)
+
+    print(
+        f"Fatti ASP analizzati: first_station={len(first_stations)}, next_station={len(next_stations)}, "
+        f"trip_times={len(trip_times)}"
+    )
+
+    routes = reconstruct_routes(
+        first_stations,
+        next_stations,
+        allowed_next_stations=allowed_next_stations,
+        skipped_edges=skipped_edges,
+        new_station_map=new_station_map
+    )
+
     unique_paths = group_by_trip_id(routes)
     print(f"Corse totali: {len(routes)}")
     print(f"Percorsi unici: {len(unique_paths)}")

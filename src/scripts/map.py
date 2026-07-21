@@ -24,15 +24,12 @@ def resolve_path(env_path, default_relative):
     return (remote_dir / default_relative).resolve()
 
 stops_csv_path = resolve_path(os.getenv("PATH_TO_STOPS_CSV"), "res/sanitized/stops.csv")
-stop_times_csv_path = resolve_path(os.getenv("PATH_TO_STOP_TIMES_CSV"), "res/sanitized/stop_times.csv")
-encoded_time_table_path = resolve_path(os.getenv("PATH_TO_ENCODED_TIME_TABLE_ASP"), "res/asp_encoding/encoded_time_table.asp")
 optimized_timetable_path = resolve_path(os.getenv("PATH_TO_OPTIMIZED_TIMETABLE_ASP"), "res/output/prova_ottimizzazione_number.asp")
-optimization_rules_path = resolve_path(os.getenv("PATH_TO_OPTIMIZATION_RULES_ASP"), "src/asp_scripts/optimizations/number_of_trains.asp")
-map_path = resolve_path(os.getenv("PATH_TO_MAP_OUTPUT"), "res/map.html")
+map_path = resolve_path(os.getenv("PATH_TO_MAP_OUTPUT"), "res/train_map.html")
 
 
 def load_stops(csv_path):
-    """carica le stazioni - dal CSV perché non le abbiamo in ASP :)"""
+    """carica le stazioni - dal CSV perché non le abbiamo in ASP con le coordinate :)"""
     stations_coords = {}
     stations_names = {}
 
@@ -52,63 +49,6 @@ def load_stops(csv_path):
     return stations_coords, stations_names
 
 
-def load_trip_times(csv_path):
-    """Carica gli orari di partenza e arrivo e l'ordine nella sequenza per ogni trip_id da stop_times.csv"""
-    trip_times = {}
-    with open(csv_path, mode="r", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            trip_id = row["trip_id"].strip()
-            arr_time = row["arrival_time"].strip()
-            dep_time = row["departure_time"].strip()
-            try:
-                seq = int(row["stop_sequence"].strip())
-            except ValueError:
-                continue
-            
-            if len(arr_time) >= 5:
-                arr_time = arr_time[:5]
-            if len(dep_time) >= 5:
-                dep_time = dep_time[:5]
-                
-            if trip_id not in trip_times:
-                trip_times[trip_id] = {}
-            trip_times[trip_id][seq] = (dep_time, arr_time)
-            
-    formatted_times = {}
-    for trip_id, seqs in trip_times.items():
-        if not seqs:
-            continue
-        min_seq = min(seqs.keys())
-        max_seq = max(seqs.keys())
-        start_time = seqs[min_seq][0]
-        end_time = seqs[max_seq][1]
-        formatted_times[trip_id] = (start_time, end_time)
-        
-    return formatted_times
-
-
-def load_trip_stops(csv_path):
-    """Carica le fermate per ogni trip_id da stop_times.csv"""
-    trip_stops = {}
-    with open(csv_path, mode="r", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            trip_id = row["trip_id"].strip()
-            stop_id = row["stop_id"].strip()
-            try:
-                seq = int(row["stop_sequence"].strip())
-            except ValueError:
-                continue
-
-            trip_stops.setdefault(trip_id, {})[seq] = stop_id
-
-    return {
-        trip_id: [seqs[seq] for seq in sorted(seqs)]
-        for trip_id, seqs in trip_stops.items()
-    }
-
-
 def load_shapes():
     """Carica le coordinate dei shapes da shapes.csv"""
     shapes_path = remote_dir / "res" / "sanitized" / "shapes.csv"
@@ -125,24 +65,44 @@ def load_shapes():
     return shapes_dict
 
 
+def format_time_minutes(t):
+    try:
+        minutes = int(str(t).strip('"'))
+        hours = (minutes // 60) % 24
+        mins = minutes % 60
+        return f"{hours:02d}:{mins:02d}"
+    except (ValueError, TypeError):
+        return str(t).strip('"')
+
+
 def parse_asp_timetable(file_paths):
-    """Parsa i file ASP e restituisce informazioni sulle corse, stazioni e assegnazioni dei treni."""
-    first_stations = {}  # trip_id -> station_id
-    next_stations = {}   # trip_id -> {station_from: station_to}
+    """Parsa i file ASP e restituisce informazioni sulle corse, stazioni, orari e assegnazioni dei treni."""
+    eff_first_stations = {} # trip_id -> station_id
+    last_stations = {}   # trip_id -> station_id
+    eff_next_stations = {} # trip_id -> {station_from: station_to}
     allowed_next_stations = {}  # trip_id -> {station_from: station_to}
     skipped_edges = {}  # trip_id -> {(station_from, station_to)}
     new_station_map = {}  # old_station_id -> new_station_id
     trip_train_assignments = {}  # trip_id -> train_id
+    trip_dep_times = {}  # trip_id -> dep_time_str
+    trip_arr_times = {}  # trip_id -> arr_time_str
+    station_dep_times = {}  # trip_id -> {station_id: dep_time_str}
+    station_arr_times = {}  # trip_id -> {station_id: arr_time_str}
 
     if isinstance(file_paths, (str, Path)):
         file_paths = [file_paths]
 
-    first_pattern = re.compile(r'first_station\("([^"]+)"\s*,\s*"([^"]+)"\)')
-    next_pattern = re.compile(r'next_station\("([^"]+)"\s*,\s*"([^"]+)"\s*,\s*"([^"]+)"\)')
-    allowed_next_pattern = re.compile(r'allowed_next_station\("([^"]+)"\s*,\s*"([^"]+)"\s*,\s*"([^"]+)"\)')
-    salta_pattern = re.compile(r'salta\("([^"]+)"\s*,\s*"([^"]+)"\s*,\s*"([^"]+)"\)')
-    new_station_pattern = re.compile(r'new_station\("([^"]+)"\s*,\s*"([^"]+)"\)')
-    assign_trip_pattern = re.compile(r'assign_trip_train\("([^"]+)"\s*,\s*\d+\s*,\s*(\d+)\)')
+    eff_first_pattern = re.compile(r'^\s*effective_first_station\("([^"]+)"\s*,\s*"([^"]+)"\)')
+    last_pattern = re.compile(r'^\s*last_station\("([^"]+)"\s*,\s*"([^"]+)"\)')
+    allowed_next_pattern = re.compile(r'^\s*allowed_next_station\("([^"]+)"\s*,\s*"([^"]+)"\s*,\s*"([^"]+)"\)')
+    eff_next_pattern = re.compile(r'^\s*effective_next_station\("([^"]+)"\s*,\s*"([^"]+)"\s*,\s*"([^"]+)"\)')
+    salta_pattern = re.compile(r'^\s*salta\("([^"]+)"\s*,\s*"([^"]+)"\s*,\s*"([^"]+)"\)')
+    new_station_pattern = re.compile(r'^\s*new_station\("([^"]+)"\s*,\s*"([^"]+)"\)')
+    assign_trip_pattern = re.compile(r'^\s*assign_trip_train\("([^"]+)"\s*,\s*\d+\s*,\s*(\d+)\)')
+    trip_dep_pattern = re.compile(r'^\s*trip_departure_time\("([^"]+)"\s*,\s*(\d+|"[^"]+")\)')
+    trip_arr_pattern = re.compile(r'^\s*trip_arrival_time\("([^"]+)"\s*,\s*(\d+|"[^"]+")\)')
+    station_dep_pattern = re.compile(r'^\s*departure_time\("([^"]+)"\s*,\s*"([^"]+)"\s*,\s*(\d+|"[^"]+")\)')
+    station_arr_pattern = re.compile(r'^\s*arrival_time\("([^"]+)"\s*,\s*"([^"]+)"\s*,\s*(\d+|"[^"]+")\)')
 
     for file_path in file_paths:
         if not file_path:
@@ -158,16 +118,22 @@ def parse_asp_timetable(file_paths):
                 if not line or line.startswith("%"):
                     continue
 
-                m_first = first_pattern.search(line)
-                if m_first:
-                    trip_id, station_id = m_first.groups()
-                    first_stations[trip_id] = station_id
+                m_eff_first = eff_first_pattern.search(line)
+                if m_eff_first:
+                    trip_id, station_id = m_eff_first.groups()
+                    eff_first_stations[trip_id] = station_id
                     continue
 
-                m_next = next_pattern.search(line)
-                if m_next:
-                    trip_id, station_from, station_to = m_next.groups()
-                    next_stations.setdefault(trip_id, {})[station_from] = station_to
+                m_last = last_pattern.search(line)
+                if m_last:
+                    trip_id, station_id = m_last.groups()
+                    last_stations[trip_id] = station_id
+                    continue
+
+                m_eff_next = eff_next_pattern.search(line)
+                if m_eff_next:
+                    trip_id, station_from, station_to = m_eff_next.groups()
+                    eff_next_stations.setdefault(trip_id, {})[station_from] = station_to
                     continue
 
                 m_allowed = allowed_next_pattern.search(line)
@@ -192,45 +158,78 @@ def parse_asp_timetable(file_paths):
                 if m_assign:
                     trip_id, train_id = m_assign.groups()
                     trip_train_assignments[trip_id] = train_id
+                    continue
 
-    return first_stations, next_stations, allowed_next_stations, skipped_edges, new_station_map, trip_train_assignments
+                m_tdep = trip_dep_pattern.search(line)
+                if m_tdep:
+                    trip_id, t_val = m_tdep.groups()
+                    trip_dep_times[trip_id] = format_time_minutes(t_val)
+                    continue
+
+                m_tarr = trip_arr_pattern.search(line)
+                if m_tarr:
+                    trip_id, t_val = m_tarr.groups()
+                    trip_arr_times[trip_id] = format_time_minutes(t_val)
+                    continue
+
+                m_sdep = station_dep_pattern.search(line)
+                if m_sdep:
+                    trip_id, station_id, t_val = m_sdep.groups()
+                    station_dep_times.setdefault(trip_id, {})[station_id] = format_time_minutes(t_val)
+                    continue
+
+                m_sarr = station_arr_pattern.search(line)
+                if m_sarr:
+                    trip_id, station_id, t_val = m_sarr.groups()
+                    station_arr_times.setdefault(trip_id, {})[station_id] = format_time_minutes(t_val)
+                    continue
+
+    trip_times = {}
+    all_trips = set(eff_first_stations.keys()).union(trip_dep_times.keys()).union(trip_arr_times.keys())
+    for trip_id in all_trips:
+        dep = trip_dep_times.get(trip_id)
+        if dep is None:
+            first_st = eff_first_stations.get(trip_id)
+            if first_st:
+                dep = station_dep_times.get(trip_id, {}).get(first_st)
+
+        arr = trip_arr_times.get(trip_id)
+        if arr is None and trip_id in last_stations:
+            last_st = last_stations[trip_id]
+            arr = station_arr_times.get(trip_id, {}).get(last_st)
+
+        if dep or arr:
+            trip_times[trip_id] = (dep or "", arr or "")
+
+    return (
+        eff_first_stations,
+        eff_next_stations,
+        allowed_next_stations,
+        skipped_edges,
+        new_station_map,
+        trip_train_assignments,
+        trip_times
+    )
 
 
 def apply_station_replacements(route, new_station_map):
     return [new_station_map.get(station_id, station_id) for station_id in route]
 
 
-def reconstruct_routes(first_stations, next_stations, allowed_next_stations=None, skipped_edges=None, new_station_map=None):
-    """Ricostruisce i percorsi per ogni trip_id a partire dalle stazioni iniziali e dalle informazioni sulle stazioni successive."""
+def reconstruct_routes(eff_first_stations, eff_next_stations, new_station_map=None):
+    """Ricostruisce i percorsi per ogni trip_id a partire unicamente da effective_first_station e effective_next_station."""
     routes = {}
-    allowed_next_stations = allowed_next_stations or {}
-    skipped_edges = skipped_edges or {}
     new_station_map = new_station_map or {}
 
-    for trip_id, start_station in first_stations.items():
+    for trip_id, start_station in eff_first_stations.items():
         route = []
         curr = start_station
         visited = set()
+        trip_edges = eff_next_stations.get(trip_id, {})
         while curr and curr not in visited:
             visited.add(curr)
             route.append(curr)
-
-            next_station = None
-            trip_allowed_edges = allowed_next_stations.get(trip_id, {})
-            if trip_allowed_edges:
-                next_station = trip_allowed_edges.get(curr)
-
-            if next_station is None:
-                trip_edges = next_stations.get(trip_id, {})
-                next_station = trip_edges.get(curr)
-
-                if next_station is not None and trip_id in skipped_edges and (curr, next_station) in skipped_edges[trip_id]:
-                    next_station = trip_edges.get(next_station)
-
-            if next_station is None:
-                break
-
-            curr = next_station
+            curr = trip_edges.get(curr)
 
         if route:
             routes[trip_id] = apply_station_replacements(route, new_station_map)
@@ -262,34 +261,33 @@ def get_coherent_station_ids(stations_coords, new_station_map):
 
 
 def main():
-    print("Inizio elaborazione dati...")
-    
     stations_coords, stations_names = load_stops(stops_csv_path)
-    print(f"Stazioni caricate da stops.csv: {len(stations_coords)}")
-    
-    trip_times = load_trip_times(stop_times_csv_path)
-    trip_stop_sequences = load_trip_stops(stop_times_csv_path)
-    print(f"Orari caricati da stop_times.csv: {len(trip_times)}")
+    print(f"\tStazioni: {len(stations_coords)}")
 
     shapes_coord = load_shapes()
-    
-    timetable_sources = [encoded_time_table_path]
-    if optimized_timetable_path and Path(optimized_timetable_path).exists():
-        timetable_sources.append(optimized_timetable_path)
-    if optimization_rules_path and Path(optimization_rules_path).exists():
-        timetable_sources.append(optimization_rules_path)
 
-    first_stations, next_stations, allowed_next_stations, skipped_edges, new_station_map, trip_train_assignments = parse_asp_timetable(timetable_sources)
+    timetable_sources = [optimized_timetable_path]
+
+    (
+        eff_first_stations,
+        eff_next_stations,
+        allowed_next_stations,
+        skipped_edges,
+        new_station_map,
+        trip_train_assignments,
+        trip_times
+    ) = parse_asp_timetable(timetable_sources)
+
     print(
-        f"Fatti ASP analizzati: first_station={len(first_stations)}, next_station={len(next_stations)}, "
-        f"allowed_next_station={len(allowed_next_stations)}, skipped_edges={len(skipped_edges)}, new_station={len(new_station_map)}"
+        f"Fatti ASP analizzati: effective_first_station={len(eff_first_stations)}, "
+        f"effective_next_station={len(eff_next_stations)}, "
+        f"allowed_next_station={len(allowed_next_stations)}, saltate={len(skipped_edges)}, "
+        f"new_station={len(new_station_map)}, trip_times={len(trip_times)}"
     )
 
     routes = reconstruct_routes(
-        first_stations,
-        next_stations,
-        allowed_next_stations=allowed_next_stations,
-        skipped_edges=skipped_edges,
+        eff_first_stations,
+        eff_next_stations,
         new_station_map=new_station_map,
     )
 
@@ -300,21 +298,17 @@ def main():
     }
 
     coherent_station_ids = get_coherent_station_ids(stations_coords, new_station_map)
-    print(f"Stazioni coerenti per la mappa: {len(coherent_station_ids)}")
+    print(f"\tStazioni considerando le sostituzioni: {len(coherent_station_ids)}")
     
     all_unique_paths = group_by_trip_id(routes)
     unique_paths = group_by_trip_id(assigned_routes)
-    print(f"Corse totali: {len(assigned_routes)}")
-    print(f"Percorsi unici: {len(unique_paths)}")
+    print(f"\tCorse totali: {len(assigned_routes)}")
+    print(f"\tPercorsi unici: {len(unique_paths)}")
 
-    display_route_names = {}
-    for path_key, trips in unique_paths.items():
-        representative_trip = trips[0]
-        route_stops = trip_stop_sequences.get(representative_trip, [])
-        if len(route_stops) >= 2:
-            display_route_names[path_key] = (route_stops[0], route_stops[-1])
-        else:
-            display_route_names[path_key] = (path_key[0], path_key[-1])
+    display_route_names = {
+        path_key: (path_key[0], path_key[-1])
+        for path_key in unique_paths
+    }
     
     if not unique_paths:
         print("Nessun percorso")
@@ -394,59 +388,57 @@ def main():
         start_id = path_key[0]
         end_id = path_key[-1]
 
-        valid_path_station_names = []
         for sid in path_key:
-            if sid not in stations_coords or sid not in coherent_station_ids:
-                continue
-            valid_path_station_names.append(stations_names.get(sid, sid).replace("Stazione di ", ""))
-            active_stations.add(sid)
-                
+            if sid in stations_coords and sid in coherent_station_ids:
+                active_stations.add(sid)
+
         representative_trip = trips[0]
-        
         if representative_trip in shapes_coord:
             coordinates = shapes_coord[representative_trip]
         else:
             coordinates = [stations_coords[sid] for sid in path_key if sid in stations_coords]
-                
+
         if len(coordinates) < 2:
             continue
 
         start_name = stations_names.get(start_id, start_id).replace("Stazione di ", "")
         end_name = stations_names.get(end_id, end_id).replace("Stazione di ", "")
         color = get_station_color(start_id)
-        # fg = feature_groups[start_id]
-        
-        stops_str = " → ".join(valid_path_station_names)
-        trips_str = ", ".join(trips[:5])
-        if len(trips) > 5:
-            trips_str += f" e altre {len(trips) - 5} corse"
-            
-        popup_html = f"""
-        <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size: 13px; color: #333; line-height: 1.5; min-width: 220px; max-width: 300px;">
-            <h4 style="margin: 0 0 5px; color: {color}; font-size: 14px; border-bottom: 2px solid #eee; padding-bottom: 3px; font-weight: 600;">
-                Tratta: {start_name} &rarr; {end_name}
-            </h4>
-            <div style="margin-top: 8px;">
-                <b>Fermate ({len(valid_path_station_names)}):</b><br>
-                <span style="color: #555; font-size: 11px; word-break: break-word;">{stops_str}</span>
-            </div>
-            <div style="margin-top: 8px; border-top: 1px solid #eee; padding-top: 5px; font-size: 11px;">
-                <b>Corse totali:</b> {len(trips)}<br>
-                <span style="color: #777; font-size: 10px; font-family: monospace; word-break: break-word;">{trips_str}</span>
-            </div>
-        </div>
-        """
-        
-        # folium.PolyLine(
-        #     locations=coordinates,
-        #     color=color,
-        #     weight=4.5,
-        #     opacity=0.8,
-        #     popup=folium.Popup(popup_html, max_width=300),
-        #     tooltip=f"Tratta: {start_name} → {end_name} ({len(trips)} corse)"
-        # ).add_to(fg)
 
         for trip_id in trips:
+            trip_skips = skipped_edges.get(trip_id, set())
+            allowed_station_ids = [path_key[0]]
+            for i in range(len(path_key) - 1):
+                s_from = path_key[i]
+                s_to = path_key[i + 1]
+                if (s_from, s_to) not in trip_skips:
+                    allowed_station_ids.append(s_to)
+
+            valid_path_station_names = []
+            for sid in allowed_station_ids:
+                if sid not in stations_coords or sid not in coherent_station_ids:
+                    continue
+                valid_path_station_names.append(stations_names.get(sid, sid).replace("Stazione di ", ""))
+
+            stops_str = " → ".join(valid_path_station_names)
+            trip_dep_arr = trip_times.get(trip_id, ("", ""))
+            time_str = f" [{trip_dep_arr[0]} → {trip_dep_arr[1]}]" if (trip_dep_arr[0] or trip_dep_arr[1]) else ""
+
+            popup_html = f"""
+            <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size: 13px; color: #333; line-height: 1.5; min-width: 220px; max-width: 300px;">
+                <h4 style="margin: 0 0 5px; color: {color}; font-size: 14px; border-bottom: 2px solid #eee; padding-bottom: 3px; font-weight: 600;">
+                    Corsa: {trip_id}
+                </h4>
+                <div style="font-size: 12px; color: #555; margin-bottom: 6px;">
+                    <b>Tratta:</b> {start_name} &rarr; {end_name}{time_str}
+                </div>
+                <div style="margin-top: 8px;">
+                    <b>Fermate effettive ({len(valid_path_station_names)}):</b><br>
+                    <span style="color: #333; font-size: 11px; word-break: break-word;">{stops_str}</span>
+                </div>
+            </div>
+            """
+
             fg = feature_groups[trip_id]
             folium.PolyLine(
                 locations=coordinates,
@@ -454,7 +446,7 @@ def main():
                 weight=4.5,
                 opacity=0.8,
                 popup=folium.Popup(popup_html, max_width=300),
-                tooltip=f"Trip: {trip_id} — {start_name} → {end_name}"
+                tooltip=f"Corsa: {trip_id} — {start_name} → {end_name}{time_str}"
             ).add_to(fg)
         
     group_stazioni = folium.FeatureGroup(name="Stazioni", control=True)
@@ -559,25 +551,30 @@ def main():
     trip_route_stations = {}
     trip_skipped_stations = {}
     for trip_id, route in routes.items():
-        filtered_stations = [sid for sid in route if sid in coherent_station_ids]
-        trip_route_stations[trip_id] = filtered_stations
+        if not route:
+            continue
+
+        route_station_ids = [route[0]]
         skipped_station_ids = []
-        if trip_id in skipped_edges:
-            skipped_station_ids = sorted(
-                sid for _, sid in skipped_edges[trip_id] if sid in coherent_station_ids
-            )
-        trip_skipped_stations[trip_id] = skipped_station_ids
+        trip_skips = skipped_edges.get(trip_id, set())
+
+        for i in range(len(route) - 1):
+            s_from = route[i]
+            s_to = route[i + 1]
+            if (s_from, s_to) in trip_skips:
+                skipped_station_ids.append(s_to)
+            else:
+                route_station_ids.append(s_to)
+
+        trip_route_stations[trip_id] = [sid for sid in route_station_ids if sid in coherent_station_ids]
+        trip_skipped_stations[trip_id] = [sid for sid in skipped_station_ids if sid in coherent_station_ids]
 
     js_trips_data = []
-    train_to_trips = {}
     for sort_key, trip_id, fg in fg_list:
         start_name, end_name, s_time, _ = sort_key
         e_time = ""
         if trip_id in trip_times:
             _, e_time = trip_times[trip_id]
-        train_id = trip_train_assignments.get(trip_id, "")
-        if train_id:
-            train_to_trips.setdefault(train_id, []).append(trip_id)
         js_trips_data.append({
             "id": trip_id,
             "start": start_name,
@@ -586,14 +583,12 @@ def main():
             "end_time": e_time,
             "js_name": fg.get_name(),
             "route_stations": trip_route_stations.get(trip_id, []),
-            "skipped_stations": trip_skipped_stations.get(trip_id, []),
-            "train_id": train_id
+            "skipped_stations": trip_skipped_stations.get(trip_id, [])
         })
         
     stations_json = json.dumps({
         "stations": js_stations_data,
-        "trips": js_trips_data,
-        "train_to_trips": train_to_trips
+        "trips": js_trips_data
     })
     map_name = mappa.get_name()
 
