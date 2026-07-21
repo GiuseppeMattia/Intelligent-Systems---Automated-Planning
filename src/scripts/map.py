@@ -1,4 +1,4 @@
-from pandas.core import generic
+import sys
 import os
 import re
 import csv
@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import folium
 import pandas as pd
+
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -24,7 +25,8 @@ def resolve_path(env_path, default_relative):
     return (remote_dir / default_relative).resolve()
 
 stops_csv_path = resolve_path(os.getenv("PATH_TO_STOPS_CSV"), "res/sanitized/stops.csv")
-optimized_timetable_path = resolve_path(os.getenv("PATH_TO_OPTIMIZED_TIMETABLE_ASP"), "res/output/prova_ottimizzazione_number.asp")
+standard_timetable_path = resolve_path(os.getenv("PATH_TO_STANDARD_TIMETABLE_PATH") or os.getenv("PATH_TO_STANDARD_TIMETABLE_ASP"), "res/output/prova_ottimizzazione.asp")
+optimized_timetable_path = resolve_path(os.getenv("PATH_TO_OPTIMIZED_TIMETABLE_PATH") or os.getenv("PATH_TO_OPTIMIZED_TIMETABLE_ASP"), "res/output/prova_ottimizzazione_number.asp")
 map_path = resolve_path(os.getenv("PATH_TO_MAP_OUTPUT"), "res/train_map.html")
 
 
@@ -266,7 +268,18 @@ def main():
 
     shapes_coord = load_shapes()
 
-    timetable_sources = [optimized_timetable_path]
+    # Selezione del file di orario da argomenti riga di comando
+    args = sys.argv[1:]
+    if any(arg in ("-o1", "--opt1", "-o") for arg in args):
+        timetable_path = optimized_timetable_path
+        mode_label = "Ottimizzazione #1 (-o1)"
+    else:
+        timetable_path = standard_timetable_path
+        mode_label = "Standard"
+
+    print(f"\tModalità: {mode_label}")
+
+    timetable_sources = [timetable_path]
 
     (
         eff_first_stations,
