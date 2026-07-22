@@ -81,3 +81,15 @@ python -m clingo res/asp_encoding/stops.asp src/asp_scripts/encode_time_table.as
 python3 src/scripts/map.py
 ```
 reconstructs train routes from the ASP facts (`first_station` and `next_station` in `encoded_time_table.asp`) and station coordinates from `stops.csv`, and generates an interactive geographical Leaflet map (saved to `train_map.html` or the location specified by `PATH_TO_MAP_OUTPUT` in `.env`) complete with custom color themes, light/dark modes, filters, tooltips, and statistics.
+
+
+
+
+
+
+
+
+
+- non trovo gli argomenti di map per variare il risultato
+- non genera la mappa, forse mi manca qualche show
+- differenza tra map e dynamic map
