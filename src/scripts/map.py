@@ -268,7 +268,6 @@ def main():
 
     shapes_coord = load_shapes()
 
-    # Selezione del file di orario da argomenti riga di comando
     args = sys.argv[1:]
     if any(arg in ("-o1", "--opt1", "-o") for arg in args):
         timetable_path = optimized_timetable_path
