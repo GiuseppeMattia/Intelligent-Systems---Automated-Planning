@@ -2,13 +2,7 @@
 
 export
 
-.PHONY: rimuovi_input crea_input
-
-crea_cartelle:
-	mkdir -p res/asp_encoding
-	mkdir -p res/output
-	mkdir -p res/sanitized
-	mkdir -p res/pendolarismo
+.PHONY: rimuovi_input crea_input init_pendolarismo init ottimizzazione_number ottimizzazione_number_stats ottimizzazione_fermate ottimizzazione_fermate_stats
 
 
 rimuovi_input:
@@ -35,6 +29,9 @@ init_pendolarismo:
 	rm -f $(PATH_TO_MATRICE_COMUNI_SOSTITUITI_CSV)
 	python3 src/scripts/parser.py
 	python3 src/scripts/counter.py
+
+
+init: rimuovi_input crea_input init_pendolarismo
 
 
 ottimizzazione_number:

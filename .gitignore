@@ -1,4 +1,3 @@
-res/**
 venv/**
 .env
 
@@ -10,3 +9,17 @@ venv/**
 _pycache__/**
 __pycache__/**
 *.pyc
+
+res/asp_encoding/**
+!res/asp_encoding/.gitkeep
+
+res/output/**
+!res/output/.gitkeep
+
+res/pendolarismo/**
+!res/pendolarismo/.gitkeep
+
+res/sanitized/**
+!res/sanitized/.gitkeep
+
+res/R_SARDEGTRASP_00008_1_dati_trenitalia
