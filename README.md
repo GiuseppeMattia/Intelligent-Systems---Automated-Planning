@@ -82,21 +82,5 @@ python3 src/scripts/map.py
 ```
 reconstructs train routes from the ASP facts (`first_station` and `next_station` in `encoded_time_table.asp`) and station coordinates from `stops.csv`, and generates an interactive geographical Leaflet map (saved to `train_map.html` or the location specified by `PATH_TO_MAP_OUTPUT` in `.env`) complete with custom color themes, light/dark modes, filters, tooltips, and statistics.
 
-
-
-
-
-
-
-
-
-- rimuovere:
-dynamic_map.py
-generate_station_rest_input.py
-required_time_encoding.py
-stopsconvertasp.py
-travel_time_calc.py
-statistics.asp
-time_table.asp
-time_table_test.asp
-links_generator.asp
+**NB** time_tables.asp stays as is the file that generates the cartesian product. Consequently, also links_generator.asp stays.
+Also stopsconvertasp.py stays due to this
