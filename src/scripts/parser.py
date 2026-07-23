@@ -1,4 +1,7 @@
-import csv
+import csv, os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 rows = []
 
@@ -18,7 +21,7 @@ codice_to_provincia = {
     "107": "carbonia-iglesias"
 }
 
-with open("res/pendolarismo/matrix_pendo2011_10112014.txt", "r") as f:
+with open(os.getenv("PATH_TO_MATRICE_PENDOLARISMO"), "r") as f:
     lines = f.readlines()
     
     for line in lines:
@@ -74,15 +77,15 @@ with open("res/pendolarismo/matrix_pendo2011_10112014.txt", "r") as f:
 
             rows.append(splitted)
 
-for row in rows:
-    print(row)
+# for row in rows:
+#     print(row)
 
-with open("res/toremove/matrice_pulita.txt", "w") as f:
+with open(os.getenv("PATH_TO_MATRICE_PULITA_TXT"), "w") as f:
     f.write(", ".join(leggenda) + "\n")
     for row in rows:
         f.write(" ".join(row) + "\n")
 
-with open("res/toremove/matrice_pulita.csv", "w", encoding="utf-8-sig") as f:
+with open(os.getenv("PATH_TO_MATRICE_PULITA_CSV"), "w", encoding="utf-8-sig") as f:
     writer = csv.writer(f)
     writer.writerow(leggenda)
     writer.writerows(rows)

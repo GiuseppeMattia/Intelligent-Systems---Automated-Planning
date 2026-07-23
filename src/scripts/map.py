@@ -25,9 +25,8 @@ def resolve_path(env_path, default_relative):
     return (remote_dir / default_relative).resolve()
 
 stops_csv_path = resolve_path(os.getenv("PATH_TO_STOPS_CSV"), "res/sanitized/stops.csv")
-standard_timetable_path = resolve_path(os.getenv("PATH_TO_STANDARD_TIMETABLE_PATH") or os.getenv("PATH_TO_STANDARD_TIMETABLE_ASP"), "res/output/prova_ottimizzazione.asp")
-optimized_timetable_path = resolve_path(os.getenv("PATH_TO_OPTIMIZED_TIMETABLE_PATH") or os.getenv("PATH_TO_OPTIMIZED_TIMETABLE_ASP"), "res/output/prova_ottimizzazione_number.asp")
-map_path = resolve_path(os.getenv("PATH_TO_MAP_OUTPUT"), "res/train_map.html")
+standard_timetable_path = resolve_path(os.getenv("PATH_TO_OPT_FER"), "res/output/ottimizzazione_fermate.asp")
+optimized_timetable_path = resolve_path(os.getenv("PATH_TO_OPT_NUM"), "res/output/ottimizzazione_number.asp")
 
 
 def load_stops(csv_path):
@@ -270,9 +269,11 @@ def main():
 
     args = sys.argv[1:]
     if any(arg in ("-o1", "--opt1", "-o") for arg in args):
+        map_path = resolve_path(os.getenv("PATH_TO_MAP_OUTPUT_NUM"), "res/output/train_map_num.html")
         timetable_path = optimized_timetable_path
         mode_label = "Ottimizzazione #1 (-o1)"
     else:
+        map_path = resolve_path(os.getenv("PATH_TO_MAP_OUTPUT_FER"), "res/output/train_map_fer.html")
         timetable_path = standard_timetable_path
         mode_label = "Standard"
 

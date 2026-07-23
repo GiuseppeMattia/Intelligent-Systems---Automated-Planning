@@ -1,15 +1,18 @@
 from collections import defaultdict
-import csv
+import csv, os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 pendolari_per_fascia = defaultdict(int)
 
-with open("res/toremove/matrice_pulita.csv", "r") as f:
+with open(os.getenv("PATH_TO_MATRICE_PULITA_CSV"), "r") as f:
     reader = csv.reader(f)
     for row in reader:
         if "prov orig" in row[0]:
             continue
 
-        print(row)
+        # print(row)
         
         chiave = (row[0], row[1], row[2], row[3], row[4]) # faccio una chiave per contare i pendolari da comune A a comune B, in una certa fascia oraria
 
@@ -17,10 +20,10 @@ with open("res/toremove/matrice_pulita.csv", "r") as f:
 
         pendolari_per_fascia[chiave] += n_pendolari
 
-for key, value in pendolari_per_fascia.items():
-    print(key, value)
+# for key, value in pendolari_per_fascia.items():
+#     print(key, value)
 
-with open("res/toremove/matrice_comuni_sostituiti_counted.csv", "w", newline="") as f:
+with open(os.getenv("PATH_TO_MATRICE_COMUNI_SOSTITUITI_CSV"), "w", newline="") as f:
     writer = csv.writer(f)
     writer.writerow(["prov orig", "com orig", "prov dest", "com dest", "fascia oraria", "n passeggeri"])
     for key, value in pendolari_per_fascia.items():

@@ -90,6 +90,13 @@ reconstructs train routes from the ASP facts (`first_station` and `next_station`
 
 
 
-- non trovo gli argomenti di map per variare il risultato
-- non genera la mappa, forse mi manca qualche show
-- differenza tra map e dynamic map
+- rimuovere:
+dynamic_map.py
+generate_station_rest_input.py
+required_time_encoding.py
+stopsconvertasp.py
+travel_time_calc.py
+statistics.asp
+time_table.asp
+time_table_test.asp
+links_generator.asp
