@@ -38,22 +38,21 @@ python3 -m clingo src/prova.asp
 
 ## Scripts usage
 
-- Inside scripts folder
 
 ```bash
-python3 stopsconvertasp.py
+python3 src/scripts/stopsconvertasp.py
 ```
 simply convert from csv to asp facts of type: station(Station_id, Station_name, Zone_id).
 
 ---
 ```bash
-python3 travel_time_calc.py
+python3 src/scripts/travel_time_calc.py
 ```
 calculate min e max reaching time from a station to another, that are linked together, then calculate the avg and write a csv file -> 'traveltimes.csv'
 
 ---
 ```bash
-python3 required_time_encoding.py
+python3 src/scripts/required_time_encoding.py
 ```
 pick the two stations' ids and the avg reaching time, then write all in asp facts
 
@@ -79,6 +78,9 @@ python -m clingo res/asp_encoding/stops.asp src/asp_scripts/encode_time_table.as
 
 ---
 ```bash
-python3 map.py
+python3 src/scripts/map.py
 ```
-reconstructs train routes from the ASP facts (`first_station` and `next_station` in `encoded_time_table.asp`) and station coordinates from `stops.csv`, and generates an interactive geographical Leaflet map (saved to `mappa_treni.html` or the location specified by `PATH_TO_MAP_OUTPUT` in `.env`) complete with custom color themes, light/dark modes, filters, tooltips, and statistics.
+reconstructs train routes from the ASP facts (`first_station` and `next_station` in `encoded_time_table.asp`) and station coordinates from `stops.csv`, and generates an interactive geographical Leaflet map (saved to `train_map.html` or the location specified by `PATH_TO_MAP_OUTPUT` in `.env`) complete with custom color themes, light/dark modes, filters, tooltips, and statistics.
+
+**NB** time_tables.asp stays as is the file that generates the cartesian product. Consequently, also links_generator.asp stays.
+Also stopsconvertasp.py stays due to this
