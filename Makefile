@@ -52,5 +52,14 @@ ottimizzazione_fermate_stats:
 
 
 
+crea_mappa_opt_fer:
+	rm -f $(PATH_TO_MAP_OUTPUT_FER)
+	python3 src/scripts/map.py
+
+crea_mappa_opt_num:
+	rm -f $(PATH_TO_MAP_OUTPUT_NUM)
+	python3 src/scripts/map.py -o1
+
+
 
 
