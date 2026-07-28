@@ -23,15 +23,7 @@ short_calendar_dates(Trip_id, Date) :-
     Date < 20241223.
 
 
-% short_calendar_dates(Trip_id, Date) :- 
-%     calendar_dates(Trip_id, Date),
-%     Date >= 20250601,
-%     Date < 20250605.
-
-
 1 { assign_trip_train(Trip_id, Date, Train_id) : train(Train_id, _, _) } 1 :- short_calendar_dates(Trip_id, Date).
-
-%% 1 { assign_trip_train("1-4751-149-0083", 20250601, Train_id) : train(Train_id, _, _) } 1 :- short_calendar_dates("1-4751-149-0083", 20250601).
 
 
 abolita(S) :- new_station(S, _).
@@ -95,13 +87,6 @@ sovrapposizione_oraria(T1, T2) :-
     sovrapposizione_oraria(T1, T2).
 
 
-% allowed_trip(T1, T2) :- 
-%     short_calendar_dates(T1, Date_1),
-%     short_calendar_dates(T2, Date_2),
-%     T1 != T2,
-%     Date_1 != Date_2.
-
-
 allowed_trip(T1, T2) :- 
     short_calendar_dates(T1, Date),
     short_calendar_dates(T2, Date),
@@ -112,7 +97,7 @@ allowed_trip(T1, T2) :-
     trip_arrival_time(T1, Arr),
     Dep >= Arr.                  
 
-
+%Now this weak constraint pays at level 2, as it needs to be prioritized with respect to the number of trains
 :~ assign_trip_train(T1, Date, Train),
     assign_trip_train(T2, Date, Train),
     not allowed_trip(T1, T2),
@@ -227,51 +212,9 @@ tempo_per_trip(T, Tempo) :-
     Tempo_rest = #sum{Time, S : tempo_rest(T, S, Time)},
     Tempo = Tempo_percorso + Tempo_rest.
 
-
-% tempo_totale(Tot) :- Tot = #sum{Tempo, T : tempo_per_trip(T, Tempo)}.
-
-
-
+%This weak constraint makes the solver pay for every train that it uses
 used_train(T) :- assign_trip_train(_, _, T).
-
 :~ used_train(T). [1@1, T]
-
-
-
-
-
-
-    
-
-
-
-% vedere il tempo risparmiato
-% minimizzare il numero di treni
-
-% different_first_station(T,S) :- first_station(T,S1), effective_first_station(T ,S), S != S1.
-% tot_different_first_station(Tot) :- Tot = #count{T, S : different_first_station(T,S)}.
-
-
-% different_next_station(T,S1,S2) :- next_station(T,S1,S2), effective_next_station(T,S1',S2'), S1!=S1', S2!=S2'.
-% different_next_station(T,S1,S2) :- next_station(T,S1,S2), effective_next_station(T,S1,S2'), S2!=S2'.
-% different_next_station(T,S1,S2) :- next_station(T,S1,S2), effective_next_station(T,S1',S2), S1!=S1'.
-
-% tot_different_next_station(Tot) :- Tot = #count{T, S1, S2 : different_next_station(T,S1,S2)}.
-
-
-% #show max_capacity/4.
-% #show used_train/1.
-% #show tempo_per_trip/2.
-% #show tempo_rest/3.
-% #show pendolarismo/4.
-% #show tot_fermate/1.
-% #show next_station_time/4.
-% #show ha_pendolarismo/3.
-% #show allowed_trip/2.
-% #show first_station/2.
-% #show next_station/3.
-% #show tot_fermate_per_trip/2.
-% #show tempo_impegato/4.
 
 #show assign_trip_train/3.
 #show effective_first_station/2.
@@ -284,6 +227,3 @@ used_train(T) :- assign_trip_train(_, _, T).
 #show trip_arrival_time/2.
 #show departure_time/3.
 #show arrival_time/3.
-
-% #show tot_different_first_station/1.
-% #show tot_different_next_station/1.
