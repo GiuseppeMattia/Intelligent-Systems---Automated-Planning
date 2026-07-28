@@ -184,7 +184,7 @@ tot_fermate_per_trip(Tot, Trip) :-
 
 tot_fermate(Tot) :- Tot = #sum{F, Trip : tot_fermate_per_trip(F, Trip)}.
 
-tempo_impegato(T, S1, S2, Tempo) :-
+tempo_impiegato(T, S1, S2, Tempo) :-
     assign_trip_train(T, _, _),
     effective_next_station(T, S1, S2),
     departure_time(T, S1, Start),
@@ -204,7 +204,7 @@ tempo_rest(T, S2, Tempo) :-
 
 tempo_per_trip(T, Tempo) :-
     assign_trip_train(T, _, _),
-    Tempo_percorso = #sum{Time, S1, S2 : tempo_impegato(T, S1, S2, Time)},
+    Tempo_percorso = #sum{Time, S1, S2 : tempo_impiegato(T, S1, S2, Time)},
     Tempo_rest = #sum{Time, S : tempo_rest(T, S, Time)},
     Tempo = Tempo_percorso + Tempo_rest.
 
