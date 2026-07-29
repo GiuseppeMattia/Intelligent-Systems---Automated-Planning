@@ -6,7 +6,7 @@
 % python3 src/scripts/generate_calendar_dates_encoding.py
 
 %% RUN WITH: (Windows)
-% python -m clingo res/asp_encoding/trip_id.asp res/output/arrival_departure.asp res/output/encoded_time_table.asp res/asp_encoding/calendar_dates.asp src/asp_scripts/train_types.asp res/output/fatti_pendolarismo.asp  src/asp_scripts/train_assignment.asp --stats=2 --quiet=1 |
+% python -m clingo res/asp_encoding/trip_id.asp res/output/arrival_departure.asp res/output/encoded_time_table.asp res/asp_encoding/calendar_dates.asp src/asp_scripts/train_types.asp res/pendolarismo/fatti_pendolarismo.asp  src/asp_scripts/train_assignment.asp --stats=2 --quiet=1 |
 % >>   Select-String "assign_trip_train" |
 % >>   ForEach-Object { $_.Line -split ' ' } |
 % >>   ForEach-Object { "$_." } |
