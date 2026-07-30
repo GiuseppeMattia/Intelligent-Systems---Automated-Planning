@@ -23,7 +23,7 @@ short_calendar_dates(Trip_id, Date) :-
     Date < 20241223.
 
 
-1 { assign_trip_train(Trip_id, Date, Train_id) : train(Train_id, _, _) } 1 :- short_calendar_dates(Trip_id, Date).
+1 { assign_trip_train(Trip_id, Date, Train_id) : train(Train_id, _, _) } :- short_calendar_dates(Trip_id, Date).
 
 
 abolita(S) :- new_station(S, _).
@@ -149,11 +149,11 @@ next_station_time(Trip, Station_1, Station_2, 4) :-
     Time >= 554.
 
 
-:~ effective_pendolarismo(S1, S2, Pass, Fascia),
-   #sum{C, Trip : next_station_time(Trip, S1, S2, Fascia), 
-                  assign_trip_train(Trip, _, Train), 
-                  train(Train, _, C)} < Pass.
-   [1@4, S1, S2, Fascia]
+:- effective_pendolarismo(S1, S2, Pass, Fascia),
+    short_calendar_dates(Trip, Date),
+    next_station_time(Trip, S1, S2, Fascia),
+    Sum = #sum{C : assign_trip_train(Trip, Date, Train), train(Train, _, C)},
+    Sum < Pass.
 
 
 ha_pendolarismo(S2, Fascia, Trip) :- 
@@ -217,8 +217,6 @@ used_train(T) :- assign_trip_train(_, _, T).
 
 
 
-
-
 1 { limite_max(M * 20) : M = 50..250 } 1.
 
 1 { limite_min(N * 20) : N = 0..250 } 1.
@@ -233,7 +231,7 @@ used_train(T) :- assign_trip_train(_, _, T).
     used_train(Train),
     #sum{Tempo, Trip : tempo_per_trip(Trip, Tempo), assign_trip_train(Trip, _, Train)} < MinT.
 
-:~ limite_max(MaxT), limite_min(MinT). [MaxT - MinT @ 2]
+:~ limite_max(MaxT), limite_min(MinT). [MaxT-MinT@2]
 
 
 
@@ -251,5 +249,4 @@ used_train(T) :- assign_trip_train(_, _, T).
 #show arrival_time/3.
 #show used_train/1.
 #show tempo_per_trip/2.
-
 

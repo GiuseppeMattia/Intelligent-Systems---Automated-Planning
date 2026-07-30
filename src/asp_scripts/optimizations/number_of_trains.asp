@@ -23,7 +23,7 @@ short_calendar_dates(Trip_id, Date) :-
     Date < 20241223.
 
 
-1 { assign_trip_train(Trip_id, Date, Train_id) : train(Train_id, _, _) } 1 :- short_calendar_dates(Trip_id, Date).
+1 { assign_trip_train(Trip_id, Date, Train_id) : train(Train_id, _, _) } :- short_calendar_dates(Trip_id, Date).
 
 
 abolita(S) :- new_station(S, _).
@@ -75,7 +75,7 @@ trip_arrival_time(Trip_id, Time) :-
 
 
 sovrapposizione_oraria(T1, T2) :-
-    T1 != T2,
+    T1 < T2,
     trip_departure_time(T1, Dep1), trip_arrival_time(T1, Arr1),
     trip_departure_time(T2, Dep2), trip_arrival_time(T2, Arr2),
     Arr1 > Dep2,
@@ -97,12 +97,15 @@ allowed_trip(T1, T2) :-
     trip_arrival_time(T1, Arr),
     Dep >= Arr.                  
 
-%Now this weak constraint pays at level 2, as it needs to be prioritized with respect to the number of trains
-:~ assign_trip_train(T1, Date, Train),
+
+has_valid_pred(T2, Date, Train) :-
+    assign_trip_train(T1, Date, Train),
     assign_trip_train(T2, Date, Train),
-    not allowed_trip(T1, T2),
-    not allowed_trip(T2, T1).
-    [1@2, T1]
+    allowed_trip(T1, T2).
+
+:~ assign_trip_train(T2, Date, Train),
+   not has_valid_pred(T2, Date, Train).
+   [1@1, T2, Train]
 
 
 
@@ -146,20 +149,16 @@ next_station_time(Trip, Station_1, Station_2, 4) :-
     Time >= 554.
 
 
-max_capacity(Station_1, Station_2, Cap, Fascia) :-
-    effective_pendolarismo(Station_1, Station_2, _, Fascia),
-    Cap = #sum{C, Trip : next_station_time(Trip, Station_1, Station_2, Fascia), assign_trip_train(Trip, _, Train), train(Train, _, C)},
-    Cap > 0.
-
-
 :- effective_pendolarismo(S1, S2, Pass, Fascia),
-    max_capacity(S1, S2, Cap, Fascia),
-    Pass > Cap.
+    short_calendar_dates(Trip, Date),
+    next_station_time(Trip, S1, S2, Fascia),
+    Sum = #sum{C : assign_trip_train(Trip, Date, Train), train(Train, _, C)},
+    Sum < Pass.
 
 
 ha_pendolarismo(S2, Fascia, Trip) :- 
     effective_pendolarismo(S1, S2, _, Fascia), 
-    assign_trip_train(Trip, _, _), 
+    short_calendar_dates(Trip, _),
     effective_next_station(Trip, S1, S2), 
     next_station_time(Trip, S1, _, Fascia).
 
@@ -167,20 +166,20 @@ ha_pendolarismo(S2, Fascia, Trip) :-
 salta(Trip, S1, S2) :-
     next_station_time(Trip, S1, S2, Fascia),
     not ha_pendolarismo(S2, Fascia, Trip),
-    assign_trip_train(Trip, _, _),
+    short_calendar_dates(Trip, _),
     not last_station(Trip, S2).
 
 
 
 allowed_next_station(Trip, S1, S2) :-
-    assign_trip_train(Trip, _, _),
+    short_calendar_dates(Trip, _),
     effective_next_station(Trip, S1, S2),
     not salta(Trip, S1, S2).
 
 
 tot_fermate_per_trip(Tot, Trip) :- 
     Tot = #count{S1, S2 : effective_next_station(Trip, S1, S2), not salta(Trip, S1, S2)}, 
-    assign_trip_train(Trip, _, _).
+    short_calendar_dates(Trip, _).
 
 
 tot_fermate(Tot) :- Tot = #sum{F, Trip : tot_fermate_per_trip(F, Trip)}.
@@ -188,7 +187,7 @@ tot_fermate(Tot) :- Tot = #sum{F, Trip : tot_fermate_per_trip(F, Trip)}.
 
 
 tempo_impiegato(T, S1, S2, Tempo) :-
-    assign_trip_train(T, _, _),
+    short_calendar_dates(T, _),
     effective_next_station(T, S1, S2),
     departure_time(T, S1, Start),
     arrival_time(T, S2, End),
@@ -196,7 +195,7 @@ tempo_impiegato(T, S1, S2, Tempo) :-
 
 
 tempo_rest(T, S2, Tempo) :-
-    assign_trip_train(T, _, _),
+    short_calendar_dates(T, _),
     not salta(T, S1, S2),
     effective_next_station(T, S1, S2),
     not effective_first_station(T, S2),
@@ -207,14 +206,16 @@ tempo_rest(T, S2, Tempo) :-
 
 
 tempo_per_trip(T, Tempo) :-
-    assign_trip_train(T, _, _),
+    short_calendar_dates(T, _),
     Tempo_percorso = #sum{Time, S1, S2 : tempo_impiegato(T, S1, S2, Time)},
     Tempo_rest = #sum{Time, S : tempo_rest(T, S, Time)},
     Tempo = Tempo_percorso + Tempo_rest.
 
 %This weak constraint makes the solver pay for every train that it uses
 used_train(T) :- assign_trip_train(_, _, T).
-:~ used_train(T). [1@1, T]
+:~ used_train(T). [1@2, T]
+
+
 
 #show assign_trip_train/3.
 #show effective_first_station/2.
@@ -227,3 +228,4 @@ used_train(T) :- assign_trip_train(_, _, T).
 #show trip_arrival_time/2.
 #show departure_time/3.
 #show arrival_time/3.
+#show used_train/1.
