@@ -1,22 +1,3 @@
-%% FIRST:
-% python3 src/scripts/generate_trip_id.py
-% python3 src/scripts/generate_arr_dep.py 
-% python3 src/scripts/generate_stoptimes_input.py 
-% python3 -m clingo res/asp_encoding/stops.asp src/asp_scripts/encode_time_table.asp | grep "station" | tr ' ' '\n' | sed 's/$/./' > res/output/encoded_time_table.asp
-% python3 src/scripts/generate_calendar_dates_encoding.py
-
-%% RUN WITH: (Windows)
-% python -m clingo res/asp_encoding/trip_id.asp res/output/arrival_departure.asp res/output/encoded_time_table.asp res/asp_encoding/calendar_dates.asp src/asp_scripts/train_types.asp res/output/fatti_pendolarismo.asp  src/asp_scripts/train_assignment.asp --stats=2 --quiet=1 |
-% >>   Select-String "assign_trip_train" |
-% >>   ForEach-Object { $_.Line -split ' ' } |
-% >>   ForEach-Object { "$_." } |
-% >>   Set-Content  res/output/prova_ottimizzazione.asp
-% (NB: this is the command for Windows Powershell environment)
-
-% RUN WITH: (Linux)
-% python3 -m clingo res/asp_encoding/trip_id.asp res/output/arrival_departure.asp res/output/encoded_time_table.asp res/asp_encoding/calendar_dates.asp res/output/fatti_pendolarismo.asp src/asp_scripts/train_types.asp res/asp_encoding/previous_stations.asp src/asp_scripts/optimizations/number_of_trains.asp --stats=2 --quiet=1 --time-limit=300 | grep -E "assign_trip_train|allowed_next_station|salta|new_station" | tr ' ' '\n' | sed 's/$/./' > res/output/ottimizzazione_number.asp
-
-
 short_calendar_dates(Trip_id, Date) :- 
     calendar_dates(Trip_id, Date),
     Date >= 20241215,
