@@ -74,6 +74,14 @@ After running the second optimization, this runs a python script to see the resu
 
 ---
 
+```bash
+make ottimizzazione_balance
+```
+
+Runs the third optimization about balancing train work time.
+
+---
+
 ### Clingo stats
 
 ```bash
@@ -89,5 +97,15 @@ make ottimizzazione_number_stats
 ```
 
 Runs the second optimization about number of trains with additional clingo statistics.
+
+---
+
+```bash
+make ottimizzazione_balance_stats
+```
+
+Runs the third optimization about balancing train work time with additional clingo statistics.
+
+---
 
 **NB**: The *time_tables.asp* file generates the cartesian product with all possible trips.
