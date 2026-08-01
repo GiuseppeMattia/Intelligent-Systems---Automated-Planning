@@ -41,6 +41,7 @@ ottimizzazione_number:
 ottimizzazione_number_stats:
 	rm -f $(PATH_TO_OPT_NUM_STATS)
 	python3 -m clingo $(PATH_TO_TRIP_ID_ASP) $(PATH_TO_ARR_DEP_ASP) $(PATH_TO_ENCODED_TIME_TABLE_ASP) $(PATH_TO_CALENDAR_DATES_ASP) $(PATH_TO_FATTI_PENDOLARISMO) src/asp_scripts/train_types.asp $(PATH_TO_PREVIOUS_STATION_ASP) src/asp_scripts/optimizations/number_of_trains.asp --stats=2 --quiet=1 --time-limit=300 > $(PATH_TO_OPT_NUM_STATS)
+	cat $(PATH_TO_OPT_NUM_STATS) | awk '/^Answer: /{getline; print}' | tr ' ' '\n' | sed 's/$$/./' | sort > $(PATH_TO_OPT_NUM)
 
 ottimizzazione_fermate:
 	rm -f $(PATH_TO_OPT_FER)
@@ -49,6 +50,7 @@ ottimizzazione_fermate:
 ottimizzazione_fermate_stats:
 	rm -f $(PATH_TO_OPT_FER_STATS)
 	python3 -m clingo $(PATH_TO_TRIP_ID_ASP) $(PATH_TO_ARR_DEP_ASP) $(PATH_TO_ENCODED_TIME_TABLE_ASP) $(PATH_TO_CALENDAR_DATES_ASP) $(PATH_TO_FATTI_PENDOLARISMO) src/asp_scripts/train_types.asp $(PATH_TO_PREVIOUS_STATION_ASP) src/asp_scripts/optimizations/train_assignment.asp --stats=2 --quiet=1 --time-limit=300 > $(PATH_TO_OPT_FER_STATS)
+	cat $(PATH_TO_OPT_FER_STATS) | awk '/^Answer: /{getline; print}' | tr ' ' '\n' | sed 's/$$/./' | sort > $(PATH_TO_OPT_FER)
 
 ottimizzazione_balance:
 	rm -f $(PATH_TO_OPT_BAL)
@@ -57,7 +59,7 @@ ottimizzazione_balance:
 ottimizzazione_balance_stats:
 	rm -f $(PATH_TO_OPT_BAL_STATS)
 	python3 -m clingo $(PATH_TO_TRIP_ID_ASP) $(PATH_TO_ARR_DEP_ASP) $(PATH_TO_ENCODED_TIME_TABLE_ASP) $(PATH_TO_CALENDAR_DATES_ASP) $(PATH_TO_FATTI_PENDOLARISMO) src/asp_scripts/train_types.asp $(PATH_TO_PREVIOUS_STATION_ASP) src/asp_scripts/optimizations/balance_time.asp --stats=2 --quiet=1 --time-limit=300 > $(PATH_TO_OPT_BAL_STATS)
-
+	cat $(PATH_TO_OPT_BAL_STATS) | awk '/^Answer: /{getline; print}' | tr ' ' '\n' | sed 's/$$/./' | sort > $(PATH_TO_OPT_BAL)
 
 
 crea_mappa_opt_fer:
